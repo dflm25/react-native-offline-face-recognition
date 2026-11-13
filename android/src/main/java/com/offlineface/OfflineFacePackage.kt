@@ -19,7 +19,7 @@ class OfflineFacePackage : BaseReactPackage() {
     mapOf(
       OfflineFaceModule.NAME to ReactModuleInfo(
         name = OfflineFaceModule.NAME,
-        className = OfflineFaceModule.NAME,
+        className = OfflineFaceModule::class.java.name,
         canOverrideExistingModule = false,
         needsEagerInit = false,
         isCxxModule = false,

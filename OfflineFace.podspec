@@ -13,8 +13,11 @@ Pod::Spec.new do |s|
   s.platforms    = { :ios => min_ios_version_supported }
   s.source       = { :git => "https://github.com/dflm25/react-native-offline-face.git", :tag => "v#{s.version}" }
 
-  s.source_files = "ios/**/*.{h,m,mm,swift,cpp}"
+  s.source_files = "ios/**/*.{h,m,mm,swift}"
   s.private_header_files = "ios/**/*.h"
+  s.resource_bundles = { "OfflineFacePrivacy" => ["ios/PrivacyInfo.xcprivacy"] }
+  s.frameworks = "AVFoundation", "Vision", "Security", "UIKit", "CoreImage", "CoreVideo"
+  s.swift_version = "5.9"
 
   install_modules_dependencies(s)
 end

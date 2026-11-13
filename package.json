@@ -1,13 +1,14 @@
 {
   "name": "react-native-offline-face",
   "version": "0.1.0",
-  "description": "react native recognition package",
+  "description": "Privacy-first, fully offline face enrollment and verification for React Native clock-in/clock-out flows.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
   "exports": {
     ".": {
-      "react-native-offline-face-source": "./src/index.tsx",
+      "react-native-offline-face-source": "./src/index.ts",
       "types": "./lib/typescript/src/index.d.ts",
+      "react-native": "./lib/module/index.js",
       "default": "./lib/module/index.js"
     },
     "./package.json": "./package.json"
@@ -17,9 +18,11 @@
     "lib",
     "android",
     "ios",
-    "cpp",
     "*.podspec",
-    "react-native.config.js",
+    "README.md",
+    "PRIVACY.md",
+    "SECURITY.md",
+    "CHANGELOG.md",
     "!ios/build",
     "!android/build",
     "!android/gradle",
@@ -43,7 +46,16 @@
   "keywords": [
     "react-native",
     "ios",
-    "android"
+    "android",
+    "face-recognition",
+    "face-verification",
+    "offline",
+    "liveness",
+    "biometrics",
+    "clock-in",
+    "attendance",
+    "new-architecture",
+    "hermes"
   ],
   "repository": {
     "type": "git",
@@ -56,6 +68,7 @@
   },
   "homepage": "https://github.com/dflm25/react-native-offline-face#readme",
   "publishConfig": {
+    "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
@@ -86,8 +99,8 @@
     "typescript": "^6.0.3"
   },
   "peerDependencies": {
-    "react": "*",
-    "react-native": "*"
+    "react": ">=19.0.0",
+    "react-native": ">=0.79.0"
   },
   "workspaces": [
     "example"
@@ -180,5 +193,7 @@
       "eslint"
     ],
     "version": "0.64.0"
-  }
+  },
+  "react-native": "./lib/module/index.js",
+  "sideEffects": false
 }
