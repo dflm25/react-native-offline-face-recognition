@@ -24,7 +24,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Initial `react-native-offline-face` native module for React Native 0.79+ (New Architecture,
+- Initial native module for React Native 0.79+ (New Architecture,
   Hermes).
 - `registerFace`, `verifyFace`, `hasFaceTemplate`, `deleteFaceTemplate`, and
   `getFaceCapabilities` APIs with TypeScript types and stable error codes.

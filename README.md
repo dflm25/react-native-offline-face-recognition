@@ -1,5 +1,8 @@
 # react-native-offline-face-recognition
 
+[![npm version](https://img.shields.io/npm/v/react-native-offline-face-recognition.svg)](https://www.npmjs.com/package/react-native-offline-face-recognition)
+[![license](https://img.shields.io/npm/l/react-native-offline-face-recognition.svg)](LICENSE)
+
 Privacy-first, fully on-device face enrollment and verification for React Native clock-in and
 clock-out flows. Built for the New Architecture and Hermes, with native iOS and Android capture
 screens.

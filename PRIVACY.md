@@ -1,4 +1,4 @@
-# Privacy
+# Privacy — react-native-offline-face-recognition
 
 ## Data flow
 
