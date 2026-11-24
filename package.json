@@ -59,14 +59,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dflm25/react-native-offline-face.git"
+    "url": "git+https://github.com/dflm25/react-native-offline-face-recognition.git"
   },
   "author": "Daniel Lucumi <dflm25@gmail.com> (https://github.com/dflm25)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/dflm25/react-native-offline-face/issues"
+    "url": "https://github.com/dflm25/react-native-offline-face-recognition/issues"
   },
-  "homepage": "https://github.com/dflm25/react-native-offline-face#readme",
+  "homepage": "https://github.com/dflm25/react-native-offline-face-recognition#readme",
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
