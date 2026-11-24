@@ -13,7 +13,7 @@ const root = path.resolve(__dirname, '..');
 const config = withMetroConfig(getDefaultConfig(__dirname), {
   root,
   dirname: __dirname,
-  conditions: ['react-native-offline-face-source'],
+  conditions: ['react-native-offline-face-recognition-source'],
 });
 
 module.exports = config;

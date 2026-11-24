@@ -2,7 +2,7 @@
 
 ## Scope and threat model
 
-`react-native-offline-face` is a local attendance aid. It is intended to make casual impersonation
+`react-native-offline-face-recognition` is a local attendance aid. It is intended to make casual impersonation
 with a photo, a phone screen, or a naive replay clip inconvenient. It is **not** a certified
 biometric authentication product and must not be the only control protecting high-value accounts,
 money, or physical access.
@@ -29,7 +29,7 @@ hardware. Device compromise is out of scope.
 
 | Risk | Mitigation |
 | --- | --- |
-| Static photo | Active challenge requires two opposite head turns and a deliberate close/open of the eyes. |
+| Static photo | Active challenge requires two opposite head turns plus a blink or nod. |
 | Simple video replay | Challenge is sequential and time-bounded; one short loop is unlikely to satisfy it. |
 | Screenshots / screen recording (Android) | `FLAG_SECURE` on the capture activity. |
 | Template at rest | AES-256-GCM with a non-exportable Android Keystore key; iOS Keychain item with `WhenUnlockedThisDeviceOnly`. |

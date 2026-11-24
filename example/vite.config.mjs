@@ -10,7 +10,7 @@ export default defineConfig((env) =>
       alias: {
         [pack.name]: path.resolve(import.meta.dirname, '..'),
       },
-      conditions: ['react-native-offline-face-source'],
+      conditions: ['react-native-offline-face-recognition-source'],
       dedupe: Object.keys(pack.peerDependencies),
     },
   })

@@ -1,5 +1,5 @@
 /**
- * Public types for react-native-offline-face.
+ * Public types for react-native-offline-face-recognition.
  *
  * Nothing in this API ever sends biometric data off the device. The native
  * layer keeps capture frames in memory and persists only an encrypted,

@@ -17,7 +17,7 @@ import {
   verifyFace,
   type FaceCapabilities,
   type FaceOptions,
-} from 'react-native-offline-face';
+} from 'react-native-offline-face-recognition';
 
 type Operation = 'idle' | 'register' | 'verify' | 'delete';
 

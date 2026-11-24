@@ -491,7 +491,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
       }
       if now - noFaceSince > 0.6 {
         updateUi("Center your face in the oval", progress: livenessTracker?.update(
-          now: now, yaw: nil, eyeOpenRatio: nil
+          now: now, yaw: nil, pitch: nil, eyeOpenRatio: nil
         ).progress ?? 0)
       }
       return
@@ -547,7 +547,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     if let tracker = livenessTracker {
       let yaw = estimatedYaw(face: face)
       let eyeOpen = eyeOpenRatio(face: face)
-      let state = tracker.update(now: now, yaw: yaw, eyeOpenRatio: eyeOpen)
+      let state = tracker.update(now: now, yaw: yaw, pitch: face.pitch?.floatValue, eyeOpenRatio: eyeOpen)
       lastLivenessState = state
       if state.failed {
         finish(faceResult(success: false, livenessPassed: false, error: .livenessFailed))

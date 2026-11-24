@@ -22,7 +22,7 @@ jest.mock('../NativeOfflineFace', () => ({
 
 const native = NativeOfflineFace as jest.Mocked<Spec>;
 
-describe('react-native-offline-face', () => {
+describe('react-native-offline-face-recognition', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

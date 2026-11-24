@@ -1,4 +1,4 @@
-# react-native-offline-face
+# react-native-offline-face-recognition
 
 Privacy-first, fully on-device face enrollment and verification for React Native clock-in and
 clock-out flows. Built for the New Architecture and Hermes, with native iOS and Android capture
@@ -9,7 +9,8 @@ screens.
 - **Local template only.** One face template is encrypted at rest with Keychain (iOS) or
   Android Keystore-backed AES-256-GCM storage.
 - **Active liveness challenge.** The user must look straight, turn their head to both sides, and
-  close/open their eyes. Static photos and naive replay clips do not complete the sequence.
+  blink **or nod**. The fallback makes the challenge more reliable with glasses and in low light.
+  Static photos and naive replay clips do not complete the sequence.
 - **Simple promise API.** Five functions, stable error codes, no camera component to wire up.
 - **Glasses hint.** On-device image classification detects eyeglasses/sunglasses and asks the user
   to remove them for a cleaner template. It is a non-blocking, best-effort hint.
@@ -36,9 +37,9 @@ screens.
 ## Installation
 
 ```sh
-npm install react-native-offline-face
+npm install react-native-offline-face-recognition
 # or
-yarn add react-native-offline-face
+yarn add react-native-offline-face-recognition
 ```
 
 ### iOS
@@ -83,7 +84,7 @@ import {
   hasFaceTemplate,
   deleteFaceTemplate,
   getFaceCapabilities,
-} from 'react-native-offline-face';
+} from 'react-native-offline-face-recognition';
 
 const capabilities = await getFaceCapabilities();
 if (!capabilities.available) {
@@ -207,7 +208,8 @@ for an unrecoverable bridge failure.
    eyeglasses/sunglasses and shows a "remove your glasses" hint. With `allowGlasses: false` the
    challenge pauses until the glasses are removed; otherwise the hint is non-blocking.
 4. The user completes an active challenge: center, turn one way, return, turn the other way,
-   close the eyes briefly and open them. A static photo or a simple looping clip fails the coherent sequence.
+   then blink or nod. The nod fallback avoids failed captures when a blink is hard to detect. A
+   static photo or a simple looping clip fails the coherent sequence.
 5. On success, six frames are captured. Each face is aligned, converted to a 64×64 masked and
    equalized grayscale patch, and reduced to a 1,520-value LBP/HOG histogram descriptor.
 6. Enrollment stores six descriptors in encrypted local storage. Verification compares six new

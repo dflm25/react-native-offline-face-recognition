@@ -40,6 +40,9 @@ internal class LivenessTracker(
   private var sawClosedEyes = false
   private var blinkOpenBaseline = 0.35f
   private var lastEyeOpen: Float? = null
+  private var lastPitch: Float? = null
+  private var blinkPitchBaseline = 0f
+  private var sawNod = false
   private var missingEyeFrames = 0
 
   fun restart(now: Long) {
@@ -50,6 +53,9 @@ internal class LivenessTracker(
     sawClosedEyes = false
     blinkOpenBaseline = 0.35f
     lastEyeOpen = null
+    lastPitch = null
+    blinkPitchBaseline = 0f
+    sawNod = false
     missingEyeFrames = 0
   }
 
@@ -62,7 +68,12 @@ internal class LivenessTracker(
    * @param yawDegrees Face yaw in degrees, or null when not available.
    * @param eyeOpenAverage Average ML Kit eye-open probability, or null.
    */
-  fun update(now: Long, yawDegrees: Float?, eyeOpenAverage: Float?): State {
+  fun update(
+    now: Long,
+    yawDegrees: Float?,
+    pitchDegrees: Float?,
+    eyeOpenAverage: Float?,
+  ): State {
     if (stage == Stage.PASSED || stage == Stage.FAILED) {
       return state()
     }
@@ -75,9 +86,13 @@ internal class LivenessTracker(
     }
 
     val yaw = yawDegrees?.takeIf { it.isFinite() }
+    val pitch = pitchDegrees?.takeIf { it.isFinite() }
     val eyesOpen = eyeOpenAverage?.takeIf { it.isFinite() }
     if (eyesOpen != null) {
       lastEyeOpen = eyesOpen
+    }
+    if (pitch != null) {
+      lastPitch = pitch
     }
 
     when (stage) {
@@ -106,24 +121,38 @@ internal class LivenessTracker(
       Stage.TURN_TWO -> {
         if (yaw != null && abs(yaw) >= 18f && yaw.sign.toInt() == -firstTurnDirection) {
           blinkOpenBaseline = max(0.20f, lastEyeOpen ?: 0.35f)
+          blinkPitchBaseline = lastPitch ?: 0f
           stage = Stage.BLINK
         }
       }
       Stage.BLINK -> {
-        val closedThreshold = max(0.14f, blinkOpenBaseline * 0.60f)
-        val openThreshold = max(0.19f, blinkOpenBaseline * 0.80f)
-        if (eyesOpen != null) {
-          missingEyeFrames = 0
-          if (eyesOpen <= closedThreshold) {
-            sawClosedEyes = true
-          } else if (sawClosedEyes && eyesOpen >= openThreshold) {
+        // Nodding is an alternative that is much more reliable than a fast
+        // blink, especially with glasses or in low light.
+        if (pitch != null) {
+          val pitchDelta = abs(pitch - blinkPitchBaseline)
+          if (pitchDelta >= 14f) {
+            sawNod = true
+          } else if (sawNod && pitchDelta <= 5f) {
             stage = Stage.PASSED
           }
-        } else {
-          // Vision/ML Kit can omit eye landmarks while the eyelids are closed.
-          missingEyeFrames++
-          if (missingEyeFrames >= 2) {
-            sawClosedEyes = true
+        }
+
+        if (stage != Stage.PASSED) {
+          val closedThreshold = max(0.18f, blinkOpenBaseline * 0.72f)
+          val openThreshold = max(0.22f, blinkOpenBaseline * 0.88f)
+          if (eyesOpen != null) {
+            missingEyeFrames = 0
+            if (eyesOpen <= closedThreshold) {
+              sawClosedEyes = true
+            } else if (sawClosedEyes && eyesOpen >= openThreshold) {
+              stage = Stage.PASSED
+            }
+          } else {
+            // Vision/ML Kit can omit eye landmarks while the eyelids are closed.
+            missingEyeFrames++
+            if (missingEyeFrames >= 1) {
+              sawClosedEyes = true
+            }
           }
         }
       }
@@ -150,7 +179,7 @@ internal class LivenessTracker(
         Stage.TURN_ONE -> "Slowly turn your head to one side"
         Stage.RETURN_CENTER -> "Look straight again"
         Stage.TURN_TWO -> "Now turn to the other side"
-        Stage.BLINK -> "Close your eyes briefly, then open them"
+        Stage.BLINK -> "Blink once or nod your head"
         Stage.PASSED -> "Liveness confirmed"
         Stage.FAILED -> "Liveness check failed"
       }

@@ -2,12 +2,12 @@
   "compilerOptions": {
     "rootDir": ".",
     "paths": {
-      "react-native-offline-face": ["./src/index"]
+      "react-native-offline-face-recognition": ["./src/index"]
     },
     "allowUnreachableCode": false,
     "allowUnusedLabels": false,
     "customConditions": [
-      "react-native-offline-face-source",
+      "react-native-offline-face-recognition-source",
       "react-native-strict-api"
     ],
     "esModuleInterop": true,

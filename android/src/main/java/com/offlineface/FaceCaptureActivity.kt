@@ -406,7 +406,7 @@ class FaceCaptureActivity : ComponentActivity() {
         resetLiveness(now)
       }
       if (now - noFaceSince > 600L) {
-        updateUi("Center your face in the oval", liveness?.update(now, null, null)?.progress ?: 0f)
+        updateUi("Center your face in the oval", liveness?.update(now, null, null, null)?.progress ?: 0f)
       }
       return
     }
@@ -430,14 +430,14 @@ class FaceCaptureActivity : ComponentActivity() {
     val widthRatio = box.width().toFloat() / bitmap.width
     val heightRatio = box.height().toFloat() / bitmap.height
     if (widthRatio < 0.20f || heightRatio < 0.20f) {
-      updateUi("Move a little closer", liveness?.update(now, null, null)?.progress ?: 0f)
+      updateUi("Move a little closer", liveness?.update(now, null, null, null)?.progress ?: 0f)
       return
     }
 
     val centerX = box.exactCenterX() / bitmap.width
     val centerY = box.exactCenterY() / bitmap.height
     if (centerX < 0.18f || centerX > 0.82f || centerY < 0.12f || centerY > 0.88f) {
-      updateUi("Center your face in the oval", liveness?.update(now, null, null)?.progress ?: 0f)
+      updateUi("Center your face in the oval", liveness?.update(now, null, null, null)?.progress ?: 0f)
       return
     }
     sawUsableFace = true
@@ -471,7 +471,7 @@ class FaceCaptureActivity : ComponentActivity() {
     }
 
     val tracker = liveness ?: return
-    val state = tracker.update(now, face.headEulerAngleY, averageEyeOpen(face))
+    val state = tracker.update(now, face.headEulerAngleY, face.headEulerAngleX, averageEyeOpen(face))
     lastLivenessState = state
     if (state.failed) {
       finishFailure("liveness_failed", livenessPassed = false)

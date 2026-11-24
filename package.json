@@ -1,12 +1,12 @@
 {
-  "name": "react-native-offline-face",
-  "version": "0.1.0",
+  "name": "react-native-offline-face-recognition",
+  "version": "0.1.2",
   "description": "Privacy-first, fully offline face enrollment and verification for React Native clock-in/clock-out flows.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",
   "exports": {
     ".": {
-      "react-native-offline-face-source": "./src/index.ts",
+      "react-native-offline-face-recognition-source": "./src/index.ts",
       "types": "./lib/typescript/src/index.d.ts",
       "react-native": "./lib/module/index.js",
       "default": "./lib/module/index.js"
@@ -35,7 +35,7 @@
     "!**/.*"
   ],
   "scripts": {
-    "example": "yarn workspace react-native-offline-face-example",
+    "example": "yarn workspace react-native-offline-face-recognition-example",
     "clean": "del-cli android/build example/android/build example/android/app/build example/ios/build lib",
     "prepare": "bob build",
     "typecheck": "tsc",
@@ -138,7 +138,7 @@
       "customExportConditions": [
         "require",
         "react-native",
-        "react-native-offline-face-source"
+        "react-native-offline-face-recognition-source"
       ]
     },
     "modulePathIgnorePatterns": [
