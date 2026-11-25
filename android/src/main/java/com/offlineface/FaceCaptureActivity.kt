@@ -85,6 +85,7 @@ class FaceCaptureActivity : ComponentActivity() {
   private var labeler: ImageLabeler? = null
   private var liveness: LivenessTracker? = null
   private var lastLivenessState: LivenessTracker.State? = null
+  private val approachTracker = FaceApproachTracker()
 
   @Volatile private var finished = false
   private var released = false
@@ -239,7 +240,13 @@ class FaceCaptureActivity : ComponentActivity() {
         textSize = 18f
         gravity = Gravity.CENTER
         minHeight = dp(48)
+        setPadding(dp(16), dp(8), dp(16), dp(8))
+        background = android.graphics.drawable.GradientDrawable().apply {
+          setColor(Color.parseColor("#B8000000"))
+          cornerRadius = dp(18).toFloat()
+        }
       }
+    topPanel.addView(instructionText, LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(12) })
     glassesWarning =
       TextView(this).apply {
         text = "Remove your glasses for a better scan"
@@ -270,7 +277,6 @@ class FaceCaptureActivity : ComponentActivity() {
       }
 
     bottomPanel.addView(glassesWarning, LinearLayout.LayoutParams(MATCH, WRAP))
-    bottomPanel.addView(instructionText, LinearLayout.LayoutParams(MATCH, WRAP))
     bottomPanel.addView(
       progressBar,
       LinearLayout.LayoutParams(MATCH, dp(6)).apply { topMargin = dp(12) },
@@ -398,13 +404,15 @@ class FaceCaptureActivity : ComponentActivity() {
     val now = SystemClock.elapsedRealtime()
 
     if (faces.isEmpty()) {
+      stableSince = 0L
       glassesDetected = false
       setGlassesWarning(false, blocking = !captureOptions.allowGlasses)
       if (noFaceSince == 0L) {
         noFaceSince = now
       }
-      if (now - noFaceSince > 1_200L && probes.isNotEmpty()) {
+      if (now - noFaceSince > 1_200L && now - lastLivenessResetAt > 800L) {
         resetLiveness(now)
+        lastLivenessResetAt = now
       }
       if (now - noFaceSince > 600L) {
         updateUi("Center your face in the oval", liveness?.update(now, null, null)?.progress ?: 0f)
@@ -431,18 +439,27 @@ class FaceCaptureActivity : ComponentActivity() {
     val widthRatio = box.width().toFloat() / bitmap.width
     val heightRatio = box.height().toFloat() / bitmap.height
     if (widthRatio < 0.20f || heightRatio < 0.20f) {
+      stableSince = 0L
       updateUi("Move a little closer", liveness?.update(now, null, null)?.progress ?: 0f)
+      return
+    }
+    if (widthRatio > 0.75f || heightRatio > 0.85f) {
+      stableSince = 0L
+      updateUi("Move a little farther away", lastLivenessState?.progress ?: 0f)
       return
     }
 
     val centerX = box.exactCenterX() / bitmap.width
     val centerY = box.exactCenterY() / bitmap.height
     if (centerX < 0.18f || centerX > 0.82f || centerY < 0.12f || centerY > 0.88f) {
+      stableSince = 0L
       updateUi("Center your face in the oval", liveness?.update(now, null, null)?.progress ?: 0f)
       return
     }
     sawUsableFace = true
-    checkGlasses(bitmap, face, now)
+    if (!captureOptions.allowGlasses) {
+      checkGlasses(bitmap, face, now)
+    }
 
     if (!captureOptions.allowGlasses && glassesDetected) {
       if (!blockedByGlasses) {
@@ -460,6 +477,11 @@ class FaceCaptureActivity : ComponentActivity() {
     }
 
     if (!captureOptions.requireLiveness) {
+      if (!face.headEulerAngleY.isFinite() || abs(face.headEulerAngleY) > 10f) {
+        stableSince = 0L
+        updateUi("Look straight ahead", 0f)
+        return
+      }
       if (stableSince == 0L) {
         stableSince = now
       }
@@ -472,6 +494,13 @@ class FaceCaptureActivity : ComponentActivity() {
     }
 
     val tracker = liveness ?: return
+    if (!approachTracker.completed) {
+      if (!approachTracker.update(widthRatio)) {
+        updateUi(if (approachTracker.needsStartingDistance) "Move a little farther away" else "Slowly move closer", 0.2f)
+        return
+      }
+      tracker.restart(now)
+    }
     val state = tracker.update(now, face.headEulerAngleY, mouthOpenRatio(face))
     lastLivenessState = state
     if (state.failed) {
@@ -480,7 +509,7 @@ class FaceCaptureActivity : ComponentActivity() {
     }
     updateUi(state.prompt, state.progress)
     if (state.passed) {
-      if (abs(face.headEulerAngleY) > 10f) {
+      if (!face.headEulerAngleY.isFinite() || abs(face.headEulerAngleY) > 10f) {
         stableSince = 0L
         updateUi("Look straight ahead", 1f)
         return
@@ -525,7 +554,7 @@ class FaceCaptureActivity : ComponentActivity() {
       .addOnSuccessListener { labels ->
         val detected =
           labels.any {
-            it.confidence >= 0.5f && it.text.lowercase(Locale.US) in GLASSES_LABELS
+            it.confidence >= glassesConfidenceThreshold() && it.text.lowercase(Locale.US) in GLASSES_LABELS
           }
         if (labels.isNotEmpty()) {
           glassesDetected = detected
@@ -565,7 +594,7 @@ class FaceCaptureActivity : ComponentActivity() {
       return
     }
     val descriptor = FaceFeatureExtractor.extract(bitmap, face) ?: run {
-      updateUi("Hold still…", lastLivenessState?.progress ?: 0f)
+      updateUi("Improve lighting and hold still…", lastLivenessState?.progress ?: 0f)
       return
     }
     lastProbeAt = now
@@ -607,6 +636,7 @@ class FaceCaptureActivity : ComponentActivity() {
   }
 
   private fun resetLiveness(now: Long) {
+    approachTracker.reset()
     probes.clear()
     stableSince = 0L
     lastLivenessState = null
@@ -784,6 +814,7 @@ class FaceCaptureActivity : ComponentActivity() {
       trackPaint.strokeWidth = 3.5f * density
       trackPaint.strokeCap = Paint.Cap.ROUND
       canvas.drawOval(ring, trackPaint)
+
 
       arcPaint.color = Color.parseColor("#34C759")
       arcPaint.strokeWidth = 3.5f * density

@@ -68,8 +68,6 @@ export default function App() {
         requireLiveness: true,
         timeout: 45000,
         threshold: 0.68,
-        allowGlasses: false,
-        glassesSensitivity: 'medium',
       };
       setOperation(kind);
       setMessage(

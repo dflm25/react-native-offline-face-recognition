@@ -13,8 +13,8 @@ export type FaceOptions = {
    */
   timeout?: number;
   /**
-   * Require the active anti-spoofing challenge before capturing a template.
-   * Defaults to `true`. Disabling it is not recommended for clock-in flows.
+   * Require a basic open/close mouth movement before capturing a template.
+   * Defaults to `true`. This is not certified anti-spoofing protection.
    */
   requireLiveness?: boolean;
   /**
@@ -24,8 +24,8 @@ export type FaceOptions = {
    */
   threshold?: number;
   /**
-   * Whether eyeglasses are allowed during capture. Defaults to `true`, which
-   * shows a non-blocking hint. Set to `false` to pause the challenge until the
+   * Whether eyeglasses are allowed during capture. Defaults to `true`, with no
+   * glasses warning. Set to `false` to pause the challenge until the
    * detected glasses are removed.
    */
   allowGlasses?: boolean;
@@ -76,7 +76,7 @@ export type FaceCapabilities = {
  * - `no_face`                  No face was found in the capture window.
  * - `multiple_faces`           More than one face was visible.
  * - `face_too_small`           The face was too far from the camera.
- * - `liveness_failed`          The anti-spoofing challenge did not pass.
+ * - `liveness_failed`          The movement challenge did not pass.
  * - `face_mismatch`            The captured face did not match the stored template.
  * - `no_template`              No face has been registered on this device.
  * - `storage_error`            The encrypted local template could not be read/written.

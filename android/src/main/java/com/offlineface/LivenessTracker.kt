@@ -2,25 +2,18 @@ package com.offlineface
 
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.sign
 
 /**
  * Active liveness state machine.
  *
- * Challenge: look straight -> turn head to one side -> return -> turn to the
- * other side -> open the mouth -> close it. A static photo, a still screen image
- * and a simple looped clip cannot complete the coherent sequence within the
- * timing window. The mouth action is easier to detect than a fast blink or a
- * small nod, especially with glasses or in low light.
+ * Basic movement challenge: look straight with the mouth closed, then open and close it.
+ * This is not certified presentation-attack detection.
  */
 internal class LivenessTracker(
   private val timeoutMs: Long = 20_000L,
 ) {
   enum class Stage {
     CENTER,
-    TURN_ONE,
-    RETURN_CENTER,
-    TURN_TWO,
     OPEN_MOUTH,
     CLOSE_MOUTH,
     PASSED,
@@ -38,18 +31,14 @@ internal class LivenessTracker(
   private var startedAt = 0L
   private var stage = Stage.CENTER
   private var centeredSince = 0L
-  private var firstTurnDirection = 0
   private var mouthBaseline = 0.10f
-  private var lastMouthRatio: Float? = null
   private var sawOpenMouth = false
 
   fun restart(now: Long) {
     startedAt = now
     stage = Stage.CENTER
     centeredSince = 0L
-    firstTurnDirection = 0
     mouthBaseline = 0.10f
-    lastMouthRatio = null
     sawOpenMouth = false
   }
 
@@ -76,37 +65,17 @@ internal class LivenessTracker(
 
     val yaw = yawDegrees?.takeIf { it.isFinite() }
     val mouth = mouthOpenRatio?.takeIf { it.isFinite() }
-    if (mouth != null) {
-      lastMouthRatio = mouth
-    }
-
     when (stage) {
       Stage.CENTER -> {
-        val centered = yaw != null && abs(yaw) <= 9f
+        val centered = yaw != null && abs(yaw) <= 9f && mouth != null && mouth <= 0.13f
         if (centered) {
           if (centeredSince == 0L) centeredSince = now
           if (now - centeredSince >= 550L) {
-            stage = Stage.TURN_ONE
+            mouthBaseline = mouth!!.coerceIn(0.02f, 0.13f)
+            stage = Stage.OPEN_MOUTH
           }
         } else {
           centeredSince = 0L
-        }
-      }
-      Stage.TURN_ONE -> {
-        if (yaw != null && abs(yaw) >= 18f) {
-          firstTurnDirection = yaw.sign.toInt()
-          stage = Stage.RETURN_CENTER
-        }
-      }
-      Stage.RETURN_CENTER -> {
-        if (yaw != null && abs(yaw) <= 9f) {
-          stage = Stage.TURN_TWO
-        }
-      }
-      Stage.TURN_TWO -> {
-        if (yaw != null && abs(yaw) >= 18f && yaw.sign.toInt() == -firstTurnDirection) {
-          mouthBaseline = (lastMouthRatio ?: 0.08f).coerceIn(0.02f, 0.30f)
-          stage = Stage.OPEN_MOUTH
         }
       }
       Stage.OPEN_MOUTH -> {
@@ -132,20 +101,14 @@ internal class LivenessTracker(
     val progress =
       when (stage) {
         Stage.CENTER -> 0.10f
-        Stage.TURN_ONE -> 0.30f
-        Stage.RETURN_CENTER -> 0.48f
-        Stage.TURN_TWO -> 0.66f
-        Stage.OPEN_MOUTH -> 0.82f
-        Stage.CLOSE_MOUTH -> 0.92f
+        Stage.OPEN_MOUTH -> 0.45f
+        Stage.CLOSE_MOUTH -> 0.75f
         Stage.PASSED -> 1f
         Stage.FAILED -> 1f
       }
     val prompt =
       when (stage) {
-        Stage.CENTER -> "Look straight ahead"
-        Stage.TURN_ONE -> "Slowly turn your head to one side"
-        Stage.RETURN_CENTER -> "Look straight again"
-        Stage.TURN_TWO -> "Now turn to the other side"
+        Stage.CENTER -> "Look straight and close your mouth"
         Stage.OPEN_MOUTH -> "Open your mouth"
         Stage.CLOSE_MOUTH -> "Now close your mouth"
         Stage.PASSED -> "Liveness confirmed"

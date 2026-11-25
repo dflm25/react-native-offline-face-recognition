@@ -169,7 +169,7 @@ function parseVerificationResult(value: unknown): FaceVerificationResult {
 
 /**
  * Opens the native front-camera flow, guides the user through an active
- * anti-spoofing challenge and stores a new encrypted face template on this
+ * movement challenge and stores a new encrypted face template on this
  * device. Replaces any existing template.
  *
  * The returned promise never sends image data anywhere; all processing is local.

@@ -102,6 +102,9 @@ final class FaceFeatureExtractor {
       )
     }
 
+    guard FaceExposure.acceptable(pixels, size: FaceFeatureExtractor.imageSize) else {
+      return nil
+    }
     return descriptor(from: pixels)
   }
 

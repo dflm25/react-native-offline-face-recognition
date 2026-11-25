@@ -32,6 +32,7 @@ android {
 }
 
 dependencies {
+  testImplementation "junit:junit:4.13.2"
   implementation "com.facebook.react:react-android"
 
   // Bundled ML Kit model: detection works without Google Play Services and

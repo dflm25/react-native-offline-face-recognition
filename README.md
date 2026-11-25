@@ -11,12 +11,11 @@ screens.
   itself does not request network permission.
 - **Local template only.** One face template is encrypted at rest with Keychain (iOS) or
   Android Keystore-backed AES-256-GCM storage.
-- **Active liveness challenge.** The user must look straight, turn their head to both sides, then
-  **open and close their mouth**. The mouth action is easier to detect than a fast blink, especially
-  with glasses or in low light. Static photos and naive replay clips do not complete the sequence.
+- **Basic movement challenge.** The user moves closer, looks straight and opens and closes their mouth. This is
+  not certified liveness detection and a photograph or video may still be used in an attack.
 - **Simple promise API.** Five functions, stable error codes, no camera component to wire up.
-- **Glasses hint.** On-device image classification detects eyeglasses/sunglasses and asks the user
-  to remove them for a cleaner template. It is a non-blocking, best-effort hint.
+- **Optional glasses check.** Glasses are allowed by default. An optional on-device classifier can
+  pause capture when it detects glasses.
 - **No third-party SaaS.** ML Kit face detection is bundled in the Android binary and Apple Vision
   is used on iOS, so detection also works without downloads.
 
@@ -129,7 +128,7 @@ type FaceOptions = {
   requireLiveness?: boolean;
   /** Similarity threshold in [0, 1]. Default: 0.68. */
   threshold?: number;
-  /** Show a hint when glasses are detected. Default: true. */
+  /** Allow glasses without a warning. Default: true. */
   allowGlasses?: boolean;
   /** Glasses detector sensitivity: 'low' | 'medium' | 'high'. Default: 'medium'. */
   glassesSensitivity?: 'low' | 'medium' | 'high';
@@ -166,7 +165,7 @@ function getFaceCapabilities(): Promise<FaceCapabilities>;
 
 ### Glasses options
 
-- `allowGlasses: true` (default) shows a non-blocking "remove your glasses" hint.
+- `allowGlasses: true` (default) allows glasses without a warning or glasses check.
 - `allowGlasses: false` pauses the liveness challenge while glasses are detected and resumes after
   they are removed. If the detector has a false positive, the user can cancel and retry.
 - `glassesSensitivity` tunes the detector: `low` is stricter (fewer prompts), `high` catches more
@@ -207,13 +206,10 @@ for an unrecoverable bridge failure.
 1. The native module opens a full-screen front-camera activity/view controller.
 2. Apple Vision (iOS) or bundled ML Kit (Android) detects a single face, its landmarks, and head
    pose. No image is written to disk.
-3. While the face is centered, a lightweight on-device image classifier checks the face crop for
-   eyeglasses/sunglasses and shows a "remove your glasses" hint. With `allowGlasses: false` the
-   challenge pauses until the glasses are removed; otherwise the hint is non-blocking.
-4. The user completes an active challenge: center, turn one way, return, turn the other way,
-   then open and close the mouth. This is easier to detect than a blink and gives immediate visual
-   feedback ("Open your mouth" / "Now close your mouth"). A static photo or a simple looping clip
-   fails the coherent sequence.
+3. If `allowGlasses: false`, an on-device image classifier checks for eyeglasses/sunglasses and
+   pauses the challenge while they are detected. By default, this check is skipped.
+4. The user moves closer, then looks straight with their mouth closed and opens and closes it. The screen gives
+   immediate feedback. This short, fixed challenge has not been validated against presentation attacks.
 5. On success, six frames are captured. Each face is aligned, converted to a 64×64 masked and
    equalized grayscale patch, and reduced to a 1,520-value LBP/HOG histogram descriptor.
 6. Enrollment stores six descriptors in encrypted local storage. Verification compares six new
@@ -260,7 +256,7 @@ See [PRIVACY.md](PRIVACY.md) for a data-flow summary.
 
 ## Security limitations
 
-This library is designed to deter casual photo, video, and screen replay. It is **not** designed
+This library has not been validated against photo, video, or screen replay. It is **not** designed
 to stop:
 
 - a custom 3D mask, deepfake, or a replay timed precisely to the challenge,
@@ -268,9 +264,8 @@ to stop:
 - identical twins or very close lookalikes,
 - a determined attacker who can replace the enrolled template.
 
-The glasses hint is intentionally best-effort: it can miss clear frames or produce a false positive
-depending on lighting, reflections and glasses style. Ask the user to remove glasses when prompted,
-but do not make it a hard gate.
+The optional glasses check is best-effort: it can miss glasses or produce a false positive
+depending on lighting, reflections and glasses style. It can block capture if explicitly enabled.
 
 For high-value access control, combine it with a second factor (device biometrics, badge, PIN),
 device attestation, rate limiting, and liveness reviewed by a specialized vendor. See

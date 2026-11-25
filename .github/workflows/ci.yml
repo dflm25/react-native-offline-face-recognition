@@ -87,20 +87,17 @@ jobs:
           fi
 
       - name: Install JDK
-        if: env.turbo_cache_hit != 1
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: 'zulu'
           java-version: '17'
 
       - name: Finalize Android SDK
-        if: env.turbo_cache_hit != 1
         run: |
           /bin/bash -c "yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null"
 
 
       - name: Cache Gradle
-        if: env.turbo_cache_hit != 1
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -116,6 +113,10 @@ jobs:
         run: |
           yarn turbo run build:android --cache-dir="${{ env.TURBO_CACHE_DIR }}"
 
+      - name: Test Android capture quality
+        working-directory: example/android
+        run: ./gradlew :react-native-offline-face-recognition:testDebugUnitTest --no-daemon
+
   build-ios:
     runs-on: macos-latest
 
@@ -128,6 +129,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Test iOS capture quality
+        run: |
+          swiftc ios/FaceExposure.swift tests/exposure/main.swift -o /tmp/offline-face-exposure-tests
+          /tmp/offline-face-exposure-tests
+          swiftc ios/LivenessTracker.swift tests/liveness/main.swift -o /tmp/offline-face-liveness-tests
+          /tmp/offline-face-liveness-tests
+          swiftc ios/FaceApproachTracker.swift tests/approach/main.swift -o /tmp/offline-face-approach-tests
+          /tmp/offline-face-approach-tests
 
       - name: Setup
         uses: ./.github/actions/setup

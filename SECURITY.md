@@ -3,7 +3,7 @@
 ## Scope and threat model
 
 `react-native-offline-face-recognition` is a local attendance aid. It is intended to make casual impersonation
-with a photo, a phone screen, or a naive replay clip inconvenient. It is **not** a certified
+with a basic mouth movement check. It is **not** a certified
 biometric authentication product and must not be the only control protecting high-value accounts,
 money, or physical access.
 
@@ -29,14 +29,13 @@ hardware. Device compromise is out of scope.
 
 | Risk | Mitigation |
 | --- | --- |
-| Static photo | Active challenge requires two opposite head turns plus an open/close mouth action. |
-| Simple video replay | Challenge is sequential and time-bounded; one short loop is unlikely to satisfy it. |
+| Presentation attacks | The fixed approach and mouth-open/close challenge is not validated against photos, screens, or replayed video and can be spoofed. Face size is not physical depth. |
 | Screenshots / screen recording (Android) | `FLAG_SECURE` on the capture activity. |
 | Template at rest | AES-256-GCM with a non-exportable Android Keystore key; iOS Keychain item with `WhenUnlockedThisDeviceOnly`. |
 | Cloud backup of template | Android `noBackupFilesDir`; iOS Keychain item is not synchronizable. |
 | Data exfiltration via library | No network permission in the library manifest, no HTTP client, no analytics, no image persistence. |
 | Accidental frame persistence | Frames are processed in memory and released; only float histograms are stored. |
-| Glasses hint | A one-shot on-device image classification of the face crop. It is non-blocking and best-effort, and no crop is persisted. |
+| Optional glasses check | On-device classification is skipped by default; when enabled with `allowGlasses: false`, it may block capture. The check is best-effort and no crop is persisted. |
 | Concurrent captures | Native module rejects a second capture with `already_in_progress`. |
 | Sensitive data in result | Results contain only `success`, an opaque local `templateId`, `score`, and `livenessPassed`. |
 

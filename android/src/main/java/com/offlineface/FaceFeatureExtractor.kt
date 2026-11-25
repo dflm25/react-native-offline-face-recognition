@@ -140,7 +140,8 @@ internal object FaceFeatureExtractor {
         }
       }
     }
-    if (inside < IMAGE_SIZE * IMAGE_SIZE / 4 || maxGray - minGray < 12) {
+    if (inside < IMAGE_SIZE * IMAGE_SIZE / 4 || maxGray - minGray < 12 ||
+      !FaceExposure.acceptable(gray, IMAGE_SIZE)) {
       return null
     }
 

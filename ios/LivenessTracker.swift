@@ -1,12 +1,9 @@
 import Foundation
 
-/// Active challenge: center -> turn -> center -> other turn -> open/close mouth.
+/// Basic movement challenge: center with mouth closed, then open and close it.
 final class LivenessTracker {
   enum Stage {
     case center
-    case turnOne
-    case returnCenter
-    case turnTwo
     case openMouth
     case closeMouth
     case passed
@@ -25,9 +22,7 @@ final class LivenessTracker {
   private var startedAt: TimeInterval = 0
   private var stage: Stage = .center
   private var centeredSince: TimeInterval = 0
-  private var firstTurnDirection = 0
   private var mouthBaseline: Float = 0.10
-  private var lastMouthRatio: Float?
   private var sawOpenMouth = false
 
   init(timeoutMs: Int = 20_000) {
@@ -38,9 +33,7 @@ final class LivenessTracker {
     startedAt = now
     stage = .center
     centeredSince = 0
-    firstTurnDirection = 0
     mouthBaseline = 0.10
-    lastMouthRatio = nil
     sawOpenMouth = false
   }
 
@@ -64,39 +57,20 @@ final class LivenessTracker {
       return state()
     }
 
-    if let mouthOpenRatio {
-      lastMouthRatio = mouthOpenRatio
-    }
-
     switch stage {
     case .center:
-      let centered = yaw != nil && abs(yaw!) <= 0.16
+      let centered = yaw != nil && yaw!.isFinite && abs(yaw!) <= 0.16 &&
+        mouthOpenRatio != nil && mouthOpenRatio!.isFinite && mouthOpenRatio! <= 0.13
       if centered {
         if centeredSince == 0 {
           centeredSince = now
         }
         if (now - centeredSince) * 1000.0 >= 550 {
-          stage = .turnOne
+          mouthBaseline = min(0.13, max(0.02, mouthOpenRatio!))
+          stage = .openMouth
         }
       } else {
         centeredSince = 0
-      }
-    case .turnOne:
-      if let yaw, abs(yaw) >= 0.32 {
-        firstTurnDirection = yaw >= 0 ? 1 : -1
-        stage = .returnCenter
-      }
-    case .returnCenter:
-      if let yaw, abs(yaw) <= 0.16 {
-        stage = .turnTwo
-      }
-    case .turnTwo:
-      if let yaw, abs(yaw) >= 0.32 {
-        let direction = yaw >= 0 ? 1 : -1
-        if direction == -firstTurnDirection {
-          mouthBaseline = min(0.30, max(0.02, lastMouthRatio ?? 0.08))
-          stage = .openMouth
-        }
       }
     case .openMouth:
       let openThreshold = max(0.14, mouthBaseline + 0.06)
@@ -123,21 +97,12 @@ final class LivenessTracker {
     switch stage {
     case .center:
       progress = 0.10
-      prompt = "Look straight ahead"
-    case .turnOne:
-      progress = 0.30
-      prompt = "Slowly turn your head to one side"
-    case .returnCenter:
-      progress = 0.48
-      prompt = "Look straight again"
-    case .turnTwo:
-      progress = 0.66
-      prompt = "Now turn to the other side"
+      prompt = "Look straight and close your mouth"
     case .openMouth:
-      progress = 0.82
+      progress = 0.45
       prompt = "Open your mouth"
     case .closeMouth:
-      progress = 0.92
+      progress = 0.75
       prompt = "Now close your mouth"
     case .passed:
       progress = 1.0

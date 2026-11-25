@@ -30,6 +30,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
   private var enrolledTemplate: FaceTemplate?
   private var probes: [[Float]] = []
   private var lastLivenessState: LivenessTracker.State?
+  private let approachTracker = FaceApproachTracker()
   private var processingFrame = false
   private var lastAnalyzedAt: CFTimeInterval = 0
   private var lastPreviewAt: CFTimeInterval = 0
@@ -221,8 +222,11 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     instructionLabel.textColor = .white
     instructionLabel.textAlignment = .center
     instructionLabel.numberOfLines = 2
+    instructionLabel.backgroundColor = UIColor.black.withAlphaComponent(0.72)
+    instructionLabel.layer.cornerRadius = 18
+    instructionLabel.clipsToBounds = true
     instructionLabel.translatesAutoresizingMaskIntoConstraints = false
-    bottomPanel.addSubview(instructionLabel)
+    view.addSubview(instructionLabel)
 
     progressView = UIProgressView(progressViewStyle: .default)
     progressView.progressTintColor = .systemGreen
@@ -265,12 +269,12 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
       glassesWarningLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 20),
       glassesWarningLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -20),
 
-      instructionLabel.topAnchor.constraint(equalTo: bottomPanel.topAnchor, constant: 18),
-      instructionLabel.leadingAnchor.constraint(equalTo: bottomPanel.leadingAnchor, constant: 20),
-      instructionLabel.trailingAnchor.constraint(equalTo: bottomPanel.trailingAnchor, constant: -20),
+      instructionLabel.topAnchor.constraint(equalTo: topStack.bottomAnchor, constant: 12),
+      instructionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
+      instructionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
       instructionLabel.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
 
-      progressView.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 12),
+      progressView.topAnchor.constraint(equalTo: bottomPanel.topAnchor, constant: 16),
       progressView.leadingAnchor.constraint(equalTo: bottomPanel.leadingAnchor, constant: 20),
       progressView.trailingAnchor.constraint(equalTo: bottomPanel.trailingAnchor, constant: -20),
       progressView.heightAnchor.constraint(equalToConstant: 3),
@@ -406,7 +410,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
 
     let faces = request.results ?? []
     var glasses: Bool?
-    if faces.count == 1,
+    if !options.allowGlasses, faces.count == 1,
       now - lastGlassesCheck >= 0.9,
       let face = faces.first
     {
@@ -481,13 +485,15 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     }
 
     if faces.isEmpty {
+      stableSince = 0
       glassesDetected = false
       setGlassesWarning(false, blocking: !options.allowGlasses)
       if noFaceSince == 0 {
         noFaceSince = now
       }
-      if now - noFaceSince > 1.2, !probes.isEmpty {
+      if now - noFaceSince > 1.2, now - lastLivenessResetAt > 0.8 {
         resetLiveness(now: now)
+        lastLivenessResetAt = now
       }
       if now - noFaceSince > 0.6 {
         updateUi("Center your face in the oval", progress: livenessTracker?.update(
@@ -519,10 +525,17 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
 
     let box = face.boundingBox
     if box.width < 0.20 || box.height < 0.20 {
+      stableSince = 0
       updateUi("Move a little closer", progress: currentLivenessProgress())
       return
     }
+    if box.width > 0.75 || box.height > 0.85 {
+      stableSince = 0
+      updateUi("Move a little farther away", progress: currentLivenessProgress())
+      return
+    }
     if box.midX < 0.18 || box.midX > 0.82 || box.midY < 0.12 || box.midY > 0.88 {
+      stableSince = 0
       updateUi("Center your face in the oval", progress: currentLivenessProgress())
       return
     }
@@ -540,11 +553,17 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     }
     if blockedByGlasses {
       blockedByGlasses = false
-      livenessTracker?.restart(now: now)
-      stableSince = 0
+      resetLiveness(now: now)
     }
 
     if let tracker = livenessTracker {
+      if !approachTracker.completed {
+        guard approachTracker.update(width: box.width) else {
+          updateUi(approachTracker.needsStartingDistance ? "Move a little farther away" : "Slowly move closer", progress: 0.2)
+          return
+        }
+        tracker.restart(now: now)
+      }
       let yaw = estimatedYaw(face: face)
       let mouth = mouthOpenRatio(face: face)
       let state = tracker.update(now: now, yaw: yaw, mouthOpenRatio: mouth)
@@ -555,7 +574,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
       }
       updateUi(state.prompt, progress: state.progress)
       if state.passed {
-        if let yaw, abs(yaw) > 0.16 {
+        guard let yaw, yaw.isFinite, abs(yaw) <= 0.16 else {
           stableSince = 0
           updateUi("Look straight ahead", progress: 1)
           return
@@ -570,6 +589,11 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
         captureProbe(pixelBuffer: pixelBuffer, face: face, now: now)
       }
     } else {
+      guard let yaw = estimatedYaw(face: face), yaw.isFinite, abs(yaw) <= 0.16 else {
+        stableSince = 0
+        updateUi("Look straight ahead", progress: 0)
+        return
+      }
       if stableSince == 0 {
         stableSince = now
       }
@@ -590,7 +614,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
       return
     }
     guard let descriptor = extractor.extract(pixelBuffer: pixelBuffer, face: face) else {
-      updateUi("Hold still…", progress: currentLivenessProgress())
+      updateUi("Improve lighting and hold still…", progress: currentLivenessProgress())
       return
     }
 
@@ -646,6 +670,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
   }
 
   private func resetLiveness(now: CFTimeInterval) {
+    approachTracker.reset()
     probes.removeAll()
     lastLivenessState = nil
     stableSince = 0
@@ -653,7 +678,9 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
   }
 
   private func estimatedYaw(face: VNFaceObservation) -> Float? {
-    if let yaw = face.yaw?.floatValue, yaw.isFinite, abs(yaw) > 0.02 {
+    // Zero is a valid, centered pose. Falling back to landmark geometry for
+    // small values can make an already frontal face appear turned.
+    if let yaw = face.yaw?.floatValue, yaw.isFinite {
       return yaw
     }
     guard let landmarks = face.landmarks,
