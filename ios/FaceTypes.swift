@@ -12,6 +12,7 @@ struct FaceCaptureOptions {
   let threshold: Double
   let allowGlasses: Bool
   let glassesSensitivity: GlassesSensitivity
+  let returnPhoto: Bool
 
   init?(dictionary: [String: Any]) {
     let timeout =
@@ -38,6 +39,7 @@ struct FaceCaptureOptions {
     self.threshold = threshold
     self.allowGlasses = allowGlasses
     self.glassesSensitivity = glassesSensitivity
+    self.returnPhoto = (dictionary["returnPhoto"] as? NSNumber)?.boolValue ?? false
   }
 
   static let defaultTimeoutMs = 45_000
@@ -66,6 +68,7 @@ enum FaceCaptureError: String {
   case faceMismatch = "face_mismatch"
   case noTemplate = "no_template"
   case storageError = "storage_error"
+  case photoCaptureFailed = "photo_capture_failed"
   case notSupported = "not_supported"
   case unknownError = "unknown_error"
 
@@ -77,6 +80,7 @@ enum FaceCaptureError: String {
 func faceResult(
   success: Bool,
   templateId: String? = nil,
+  photoBase64: String? = nil,
   score: Double? = nil,
   livenessPassed: Bool? = nil,
   error: FaceCaptureError? = nil
@@ -85,6 +89,7 @@ func faceResult(
   if let templateId {
     result["templateId"] = templateId
   }
+  if let photoBase64 { result["photoBase64"] = photoBase64 }
   if let score {
     result["score"] = score
   }

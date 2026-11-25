@@ -37,7 +37,7 @@ hardware. Device compromise is out of scope.
 | Accidental frame persistence | Frames are processed in memory and released; only float histograms are stored. |
 | Optional glasses check | On-device classification is skipped by default; when enabled with `allowGlasses: false`, it may block capture. The check is best-effort and no crop is persisted. |
 | Concurrent captures | Native module rejects a second capture with `already_in_progress`. |
-| Sensitive data in result | Results contain only `success`, an opaque local `templateId`, `score`, and `livenessPassed`. |
+| Sensitive data in result | Results contain status, an opaque local ID and score. An opt-in registration result can also contain a JPEG face photo; the host app is responsible for protecting it. |
 
 ## Residual risks
 

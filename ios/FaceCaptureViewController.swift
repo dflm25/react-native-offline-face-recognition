@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreVideo
+import CoreImage
 import UIKit
 import Vision
 
@@ -29,6 +30,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
   private var timeoutWorkItem: DispatchWorkItem?
   private var enrolledTemplate: FaceTemplate?
   private var probes: [[Float]] = []
+  private var registrationPhoto: String?
   private var lastLivenessState: LivenessTracker.State?
   private let approachTracker = FaceApproachTracker()
   private var processingFrame = false
@@ -626,6 +628,13 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     )
 
     if probes.count >= FaceCaptureViewController.probeCount {
+      if mode == "register", options.returnPhoto {
+        guard let photo = makePhoto(pixelBuffer: pixelBuffer, face: face) else {
+          finish(FaceCaptureError.photoCaptureFailed.result)
+          return
+        }
+        registrationPhoto = photo
+      }
       completeCapture()
     }
   }
@@ -640,6 +649,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
           faceResult(
             success: true,
             templateId: template.templateId,
+            photoBase64: registrationPhoto,
             livenessPassed: lastLivenessState?.passed
           )
         )
@@ -670,11 +680,34 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
   }
 
   private func resetLiveness(now: CFTimeInterval) {
+    registrationPhoto = nil
     approachTracker.reset()
     probes.removeAll()
     lastLivenessState = nil
     stableSince = 0
     livenessTracker?.restart(now: now)
+  }
+
+  private func makePhoto(pixelBuffer: CVPixelBuffer, face: VNFaceObservation) -> String? {
+    let image = CIImage(cvPixelBuffer: pixelBuffer)
+    let bounds = image.extent
+    let box = face.boundingBox
+    let rect = CGRect(x: box.minX * bounds.width, y: box.minY * bounds.height,
+                      width: box.width * bounds.width, height: box.height * bounds.height)
+    let side = min(max(rect.width, rect.height) * 1.35, min(bounds.width, bounds.height))
+    guard side >= 24 else { return nil }
+    let crop = CGRect(x: min(max(rect.midX - side / 2, bounds.minX), bounds.maxX - side),
+                      y: min(max(rect.midY - side / 2, bounds.minY), bounds.maxY - side),
+                      width: side, height: side)
+    guard let cgImage = CIContext(options: [.cacheIntermediates: false]).createCGImage(image, from: crop) else { return nil }
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 256, height: 256), format: format)
+    let jpeg = renderer.jpegData(withCompressionQuality: 0.65) { _ in
+      UIImage(cgImage: cgImage).draw(in: CGRect(x: 0, y: 0, width: 256, height: 256))
+    }
+    guard jpeg.count <= 96_000 else { return nil }
+    return jpeg.base64EncodedString()
   }
 
   private func estimatedYaw(face: VNFaceObservation) -> Float? {

@@ -10,10 +10,11 @@
      `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` and `kSecAttrSynchronizable = false`.
    - Android: an AES-256-GCM ciphertext in `noBackupFilesDir`; the key never leaves Android
      Keystore.
-5. On verification, six fresh descriptors are compared locally. The JS result contains only an
-   opaque local ID, a score, and a liveness boolean.
-6. Frames and intermediate buffers are released. No image, embedding, or score is sent to the
-   library author or any third party.
+5. On verification, six fresh descriptors are compared locally. When `returnPhoto: true` is explicitly
+   requested for registration, a JPEG face crop is returned as base64 to the host app. It is not saved
+   by the library; the host controls its further use, storage, and deletion.
+6. Frames and intermediate buffers are released. The library does not send images, descriptors, or
+   scores to the library author or any third party; host apps may handle returned data separately.
 
 The package contains no networking code. The Android library manifest does not include
 `INTERNET`. The iOS privacy manifest (`ios/PrivacyInfo.xcprivacy`) declares no tracking, no
@@ -35,7 +36,7 @@ storage and comparison. The publisher must provide:
 
 `deleteFaceTemplate()` removes the Keychain item on iOS and deletes the encrypted file plus the
 Android Keystore key on Android. The operation is idempotent. It does not delete clock-in events
-that the host app may have already recorded.
+or photos that the host app may have saved separately.
 
 ## Children
 

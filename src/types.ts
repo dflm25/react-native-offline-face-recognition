@@ -34,6 +34,8 @@ export type FaceOptions = {
    * positives, `high` prefers catching more glasses. Defaults to `medium`.
    */
   glassesSensitivity?: GlassesSensitivity;
+  /** Return a JPEG face photo as base64 on successful registration. Default: false. */
+  returnPhoto?: boolean;
 };
 
 export type GlassesSensitivity = 'low' | 'medium' | 'high';
@@ -42,6 +44,8 @@ export type FaceRegistrationResult = {
   success: boolean;
   /** Opaque local identifier for the stored template. Never an identity. */
   templateId?: string;
+  /** JPEG bytes encoded as base64, without a data URI prefix, when requested. */
+  photoBase64?: string;
   /** Stable machine-readable error code when `success` is false. */
   error?: string;
 };
@@ -80,6 +84,7 @@ export type FaceCapabilities = {
  * - `face_mismatch`            The captured face did not match the stored template.
  * - `no_template`              No face has been registered on this device.
  * - `storage_error`            The encrypted local template could not be read/written.
+ * - `photo_capture_failed`     The requested enrollment photo could not be encoded.
  * - `not_supported`            The platform or build is not supported.
  * - `unknown_error`            An unexpected native failure.
  */
@@ -97,5 +102,6 @@ export type FaceErrorCode =
   | 'face_mismatch'
   | 'no_template'
   | 'storage_error'
+  | 'photo_capture_failed'
   | 'not_supported'
   | 'unknown_error';

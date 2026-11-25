@@ -7,7 +7,8 @@ Privacy-first, fully on-device face enrollment and verification for React Native
 clock-out flows. Built for the New Architecture and Hermes, with native iOS and Android capture
 screens.
 
-- **Offline by design.** No images, embeddings, templates, or scores leave the device. The library
+- **Offline by design.** The library processes data on the device and does not upload it. The host
+  app can explicitly request a registration photo and is responsible for its handling. The library
   itself does not request network permission.
 - **Local template only.** One face template is encrypted at rest with Keychain (iOS) or
   Android Keystore-backed AES-256-GCM storage.
@@ -98,9 +99,15 @@ const enrollment = await registerFace({
   timeout: 45_000,
   requireLiveness: true,
   threshold: 0.68,
+  returnPhoto: true, // Optional: return a JPEG face crop as base64.
 });
 if (!enrollment.success) {
   console.warn(enrollment.error);
+}
+
+// The host app decides whether and how to save the optional photo securely.
+if (enrollment.success && enrollment.photoBase64) {
+  // Handle the sensitive photo according to your app's retention policy.
 }
 
 // Clock-in / clock-out.
@@ -132,11 +139,14 @@ type FaceOptions = {
   allowGlasses?: boolean;
   /** Glasses detector sensitivity: 'low' | 'medium' | 'high'. Default: 'medium'. */
   glassesSensitivity?: 'low' | 'medium' | 'high';
+  /** Return a JPEG face crop as base64 on registration. Default: false. */
+  returnPhoto?: boolean;
 };
 
 type FaceRegistrationResult = {
   success: boolean;
   templateId?: string;
+  photoBase64?: string;
   error?: string;
 };
 
@@ -194,6 +204,7 @@ await registerFace({
 | `face_mismatch` | The score was below `threshold`. |
 | `no_template` | No face has been enrolled on this device. |
 | `storage_error` | The encrypted template could not be read or written. |
+| `photo_capture_failed` | The requested registration photo could not be encoded. |
 | `not_supported` | Unsupported platform or build. |
 | `unknown_error` | Unexpected native failure. |
 
@@ -205,7 +216,7 @@ for an unrecoverable bridge failure.
 
 1. The native module opens a full-screen front-camera activity/view controller.
 2. Apple Vision (iOS) or bundled ML Kit (Android) detects a single face, its landmarks, and head
-   pose. No image is written to disk.
+   pose. The library does not write camera images to disk.
 3. If `allowGlasses: false`, an on-device image classifier checks for eyeglasses/sunglasses and
    pauses the challenge while they are detected. By default, this check is skipped.
 4. The user moves closer, then looks straight with their mouth closed and opens and closes it. The screen gives
@@ -214,9 +225,11 @@ for an unrecoverable bridge failure.
    equalized grayscale patch, and reduced to a 1,520-value LBP/HOG histogram descriptor.
 6. Enrollment stores six descriptors in encrypted local storage. Verification compares six new
    descriptors against the enrolled set using block-wise histogram intersection.
-7. Only a boolean, score, and template ID cross the native bridge. Frames are released immediately.
+7. A boolean, score, and template ID cross the native bridge. If explicitly requested at registration,
+   a 256×256 JPEG face crop is also returned as base64; the host app controls its storage and deletion.
 
 There is no HTTP client in the native module, no analytics, no cloud SDK, and no upload code path.
+The host app can store or transmit a requested photo, so its own privacy disclosures must reflect that.
 The iOS privacy manifest declares no collected data types and no tracking.
 
 ## Matching and thresholds
@@ -243,9 +256,8 @@ templates are stored locally and are bound to that installation/device.
 - Enrollment data is biometric data under GDPR, BIPA, and similar laws. Obtain informed consent,
   publish a retention policy, and provide deletion (for example call `deleteFaceTemplate` when an
   employee leaves).
-- The template is local. If your clock-in flow needs an audit trail, send only an event with a
-  timestamp and a non-reversible local template ID — never send images, descriptors, or scores
-  that can be replayed.
+- The template is local. The optional returned photo is sensitive biometric data; the host app is
+  responsible for consent, access control, storage, retention, and deletion as applicable.
 - `deleteFaceTemplate` removes the Keychain item / encrypted file and the Android Keystore key.
 - iOS Keychain items can survive app reinstallation; call `deleteFaceTemplate` during account
   cleanup.

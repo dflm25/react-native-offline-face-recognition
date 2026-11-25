@@ -42,6 +42,7 @@ class OfflineFaceModule(reactContext: ReactApplicationContext) :
         map.putBoolean("success", success)
         if (success) {
           data.getStringExtra(EXTRA_TEMPLATE_ID)?.let { map.putString("templateId", it) }
+          data.getStringExtra(EXTRA_PHOTO)?.let { map.putString("photoBase64", it) }
           if (data.hasExtra(EXTRA_SCORE)) {
             map.putDouble("score", data.getDoubleExtra(EXTRA_SCORE, 0.0))
           }
@@ -137,6 +138,7 @@ class OfflineFaceModule(reactContext: ReactApplicationContext) :
             putExtra(EXTRA_THRESHOLD, parsed.threshold)
             putExtra(EXTRA_ALLOW_GLASSES, parsed.allowGlasses)
             putExtra(EXTRA_GLASSES_SENSITIVITY, parsed.glassesSensitivity)
+            putExtra(EXTRA_RETURN_PHOTO, mode == MODE_REGISTER && parsed.returnPhoto)
           }
         activity.startActivityForResult(intent, REQUEST_CAPTURE)
       } catch (_: Throwable) {

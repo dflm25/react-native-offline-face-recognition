@@ -11,6 +11,8 @@ internal const val EXTRA_REQUIRE_LIVENESS = "com.offlineface.REQUIRE_LIVENESS"
 internal const val EXTRA_THRESHOLD = "com.offlineface.THRESHOLD"
 internal const val EXTRA_ALLOW_GLASSES = "com.offlineface.ALLOW_GLASSES"
 internal const val EXTRA_GLASSES_SENSITIVITY = "com.offlineface.GLASSES_SENSITIVITY"
+internal const val EXTRA_RETURN_PHOTO = "com.offlineface.RETURN_PHOTO"
+internal const val EXTRA_PHOTO = "com.offlineface.PHOTO"
 internal const val EXTRA_SUCCESS = "com.offlineface.SUCCESS"
 internal const val EXTRA_TEMPLATE_ID = "com.offlineface.TEMPLATE_ID"
 internal const val EXTRA_SCORE = "com.offlineface.SCORE"
@@ -28,6 +30,7 @@ internal data class FaceCaptureOptions(
   val threshold: Double = DEFAULT_THRESHOLD,
   val allowGlasses: Boolean = true,
   val glassesSensitivity: String = "medium",
+  val returnPhoto: Boolean = false,
 ) {
   companion object {
     fun fromMap(map: ReadableMap?): FaceCaptureOptions? {
@@ -58,7 +61,8 @@ internal data class FaceCaptureOptions(
       if (threshold < 0.0 || threshold > 1.0 || threshold.isNaN()) {
         return null
       }
-      return FaceCaptureOptions(timeout, requireLiveness, threshold, allowGlasses, glassesSensitivity)
+      val returnPhoto = if (map.hasKey("returnPhoto")) map.getBoolean("returnPhoto") else false
+      return FaceCaptureOptions(timeout, requireLiveness, threshold, allowGlasses, glassesSensitivity, returnPhoto)
     }
   }
 }
@@ -72,6 +76,7 @@ internal data class FaceTemplateRecord(
 internal data class CaptureOutcome(
   val success: Boolean,
   val templateId: String? = null,
+  val photoBase64: String? = null,
   val score: Double? = null,
   val livenessPassed: Boolean? = null,
   val error: String? = null,

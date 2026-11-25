@@ -43,6 +43,27 @@ describe('react-native-offline-face-recognition', () => {
       threshold: 0.68,
       allowGlasses: true,
       glassesSensitivity: 'medium',
+      returnPhoto: false,
+    });
+  });
+
+  it('returns a requested registration photo', async () => {
+    native.registerFace.mockResolvedValue({
+      success: true,
+      photoBase64: 'anBlZw==',
+    });
+    await expect(registerFace({ returnPhoto: true })).resolves.toEqual({
+      success: true,
+      photoBase64: 'anBlZw==',
+    });
+    expect(native.registerFace).toHaveBeenCalledWith(
+      expect.objectContaining({ returnPhoto: true })
+    );
+    await expect(
+      registerFace({ returnPhoto: 'yes' as unknown as boolean })
+    ).resolves.toEqual({
+      success: false,
+      error: 'invalid_options',
     });
   });
 

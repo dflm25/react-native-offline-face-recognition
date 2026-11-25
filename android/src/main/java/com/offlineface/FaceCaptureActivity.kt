@@ -85,6 +85,7 @@ class FaceCaptureActivity : ComponentActivity() {
   private var labeler: ImageLabeler? = null
   private var liveness: LivenessTracker? = null
   private var lastLivenessState: LivenessTracker.State? = null
+  private var registrationPhoto: String? = null
   private val approachTracker = FaceApproachTracker()
 
   @Volatile private var finished = false
@@ -130,6 +131,7 @@ class FaceCaptureActivity : ComponentActivity() {
         threshold = intent.getDoubleExtra(EXTRA_THRESHOLD, DEFAULT_THRESHOLD),
         allowGlasses = intent.getBooleanExtra(EXTRA_ALLOW_GLASSES, true),
         glassesSensitivity = intent.getStringExtra(EXTRA_GLASSES_SENSITIVITY) ?: "medium",
+        returnPhoto = intent.getBooleanExtra(EXTRA_RETURN_PHOTO, false),
       )
 
     if (
@@ -603,7 +605,36 @@ class FaceCaptureActivity : ComponentActivity() {
     updateUi("Capturing ${probes.size}/$PROBE_COUNT", progress)
 
     if (probes.size >= PROBE_COUNT) {
+      if (mode == MODE_REGISTER && captureOptions.returnPhoto) {
+        registrationPhoto = makePhoto(bitmap, face)
+        if (registrationPhoto == null) {
+          finishFailure("photo_capture_failed")
+          return
+        }
+      }
       completeCapture()
+    }
+  }
+
+  private fun makePhoto(source: android.graphics.Bitmap, face: Face): String? {
+    val box = face.boundingBox
+    val side = min((max(box.width(), box.height()) * 1.35f).roundToInt(), min(source.width, source.height))
+    if (side < 24) return null
+    val left = (box.exactCenterX() - side / 2f).roundToInt().coerceIn(0, source.width - side)
+    val top = (box.exactCenterY() - side / 2f).roundToInt().coerceIn(0, source.height - side)
+    var crop: android.graphics.Bitmap? = null
+    var scaled: android.graphics.Bitmap? = null
+    return try {
+      crop = android.graphics.Bitmap.createBitmap(source, left, top, side, side)
+      scaled = android.graphics.Bitmap.createScaledBitmap(crop, 256, 256, true)
+      val output = java.io.ByteArrayOutputStream()
+      if (!scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 65, output) || output.size() > 96_000) null
+      else android.util.Base64.encodeToString(output.toByteArray(), android.util.Base64.NO_WRAP)
+    } catch (_: Exception) {
+      null
+    } finally {
+      if (scaled !== crop && scaled !== source) scaled?.recycle()
+      if (crop !== source) crop?.recycle()
     }
   }
 
@@ -617,7 +648,7 @@ class FaceCaptureActivity : ComponentActivity() {
       if (record == null) {
         finishFailure("storage_error")
       } else {
-        finishSuccess(templateId = record.templateId, livenessPassed = lastLivenessState?.passed)
+        finishSuccess(templateId = record.templateId, photoBase64 = registrationPhoto, livenessPassed = lastLivenessState?.passed)
       }
       return
     }
@@ -636,6 +667,7 @@ class FaceCaptureActivity : ComponentActivity() {
   }
 
   private fun resetLiveness(now: Long) {
+    registrationPhoto = null
     approachTracker.reset()
     probes.clear()
     stableSince = 0L
@@ -655,6 +687,7 @@ class FaceCaptureActivity : ComponentActivity() {
 
   private fun finishSuccess(
     templateId: String? = null,
+    photoBase64: String? = null,
     score: Double? = null,
     livenessPassed: Boolean? = null,
   ) {
@@ -662,6 +695,7 @@ class FaceCaptureActivity : ComponentActivity() {
       CaptureOutcome(
         success = true,
         templateId = templateId,
+        photoBase64 = photoBase64,
         score = score,
         livenessPassed = livenessPassed,
       )
@@ -696,6 +730,7 @@ class FaceCaptureActivity : ComponentActivity() {
         putExtra(EXTRA_SUCCESS, outcome.success)
         putExtra(EXTRA_ERROR, outcome.error)
         outcome.templateId?.let { putExtra(EXTRA_TEMPLATE_ID, it) }
+        outcome.photoBase64?.let { putExtra(EXTRA_PHOTO, it) }
         outcome.score?.let { putExtra(EXTRA_SCORE, it) }
         outcome.livenessPassed?.let { putExtra(EXTRA_LIVENESS, it) }
       }

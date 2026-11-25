@@ -28,6 +28,7 @@ type NormalizedOptions = {
   threshold: number;
   allowGlasses: boolean;
   glassesSensitivity: 'low' | 'medium' | 'high';
+  returnPhoto: boolean;
 };
 
 type ValidationResult =
@@ -80,6 +81,11 @@ function validateOptions(options: FaceOptions | undefined): ValidationResult {
     return { ok: false, error: 'invalid_options' };
   }
 
+  const returnPhoto = options?.returnPhoto ?? false;
+  if (typeof returnPhoto !== 'boolean') {
+    return { ok: false, error: 'invalid_options' };
+  }
+
   return {
     ok: true,
     value: {
@@ -88,6 +94,7 @@ function validateOptions(options: FaceOptions | undefined): ValidationResult {
       threshold,
       allowGlasses,
       glassesSensitivity,
+      returnPhoto,
     },
   };
 }
@@ -133,6 +140,9 @@ function parseRegistrationResult(value: unknown): FaceRegistrationResult {
     success: true,
     ...(typeof record.templateId === 'string'
       ? { templateId: record.templateId }
+      : {}),
+    ...(typeof record.photoBase64 === 'string' && record.photoBase64.length > 0
+      ? { photoBase64: record.photoBase64 }
       : {}),
   };
 }
