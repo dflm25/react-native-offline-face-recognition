@@ -3,6 +3,7 @@ package com.offlineface
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.system.Os
 import android.util.Base64
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -75,6 +76,7 @@ internal class FaceTemplateStore(context: Context) {
       val record =
         FaceTemplateRecord(
           templateId = UUID.randomUUID().toString(),
+          format = FaceDescriptorFormat.EYE_ALIGNED,
           descriptors = descriptors.map { it.copyOf() },
           createdAt = System.currentTimeMillis(),
         )
@@ -95,17 +97,15 @@ internal class FaceTemplateStore(context: Context) {
       envelope.write(ciphertext)
 
       val tempFile = File(templateFile.parentFile, "${templateFile.name}.tmp")
-      FileOutputStream(tempFile).use { output ->
-        output.write(envelope.toByteArray())
-        output.fd.sync()
-      }
-      if (templateFile.exists() && !templateFile.delete()) {
+      try {
+        FileOutputStream(tempFile).use { output ->
+          output.write(envelope.toByteArray())
+          output.fd.sync()
+        }
+        // Same-directory rename replaces the old template only after the new write succeeds.
+        Os.rename(tempFile.absolutePath, templateFile.absolutePath)
+      } finally {
         tempFile.delete()
-        return null
-      }
-      if (!tempFile.renameTo(templateFile)) {
-        tempFile.delete()
-        return null
       }
       record
     } catch (_: Throwable) {
@@ -161,7 +161,7 @@ internal class FaceTemplateStore(context: Context) {
       descriptors.put(Base64.encodeToString(toLittleEndian(descriptor), Base64.NO_WRAP))
     }
     return JSONObject()
-      .put("version", TEMPLATE_VERSION)
+      .put("version", record.format.version)
       .put("templateId", record.templateId)
       .put("createdAt", record.createdAt)
       .put("platform", "android")
@@ -171,9 +171,8 @@ internal class FaceTemplateStore(context: Context) {
 
   private fun decode(plaintext: ByteArray): FaceTemplateRecord? {
     val json = JSONObject(String(plaintext, Charsets.UTF_8))
-    if (json.optInt("version", -1) != TEMPLATE_VERSION) {
-      return null
-    }
+    val version = json.optInt("version", -1)
+    val format = FaceDescriptorFormat.entries.firstOrNull { it.version == version } ?: return null
     val templateId = json.optString("templateId", "")
     if (templateId.isEmpty()) {
       return null
@@ -207,6 +206,7 @@ internal class FaceTemplateStore(context: Context) {
 
     return FaceTemplateRecord(
       templateId = templateId,
+      format = format,
       descriptors = descriptors,
       createdAt = json.optLong("createdAt", 0L),
     )
@@ -232,7 +232,6 @@ internal class FaceTemplateStore(context: Context) {
     const val MAGIC = "OF01"
     const val HEADER_SIZE = 4 + 12
     const val IV_SIZE = 12
-    const val TEMPLATE_VERSION = 1
     const val KEYSTORE = "AndroidKeyStore"
     const val KEY_ALIAS = "react-native-offline-face.template.v1"
     const val TRANSFORMATION = "AES/GCM/NoPadding"

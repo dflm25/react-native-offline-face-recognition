@@ -67,8 +67,14 @@ internal data class FaceCaptureOptions(
   }
 }
 
+internal enum class FaceDescriptorFormat(val version: Int) {
+  LEGACY(1),
+  EYE_ALIGNED(2),
+}
+
 internal data class FaceTemplateRecord(
   val templateId: String,
+  val format: FaceDescriptorFormat,
   val descriptors: List<FloatArray>,
   val createdAt: Long,
 )

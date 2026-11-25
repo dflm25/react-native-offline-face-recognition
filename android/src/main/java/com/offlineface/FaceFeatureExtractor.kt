@@ -55,7 +55,7 @@ internal object FaceFeatureExtractor {
     bins
   }
 
-  fun extract(source: Bitmap, face: Face): FloatArray? {
+  fun extract(source: Bitmap, face: Face, format: FaceDescriptorFormat): FloatArray? {
     if (source.isRecycled || source.width < 48 || source.height < 48) {
       return null
     }
@@ -65,6 +65,31 @@ internal object FaceFeatureExtractor {
       return null
     }
 
+    return when (format) {
+      FaceDescriptorFormat.LEGACY -> extractLegacy(source, face)
+      FaceDescriptorFormat.EYE_ALIGNED -> extractEyeAligned(source, face)
+    }
+  }
+
+  private fun extractEyeAligned(source: Bitmap, face: Face): FloatArray? {
+    val firstEye = face.getLandmark(FaceLandmark.LEFT_EYE)?.position ?: return null
+    val secondEye = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position ?: return null
+    val values = FaceEyeAlignment.matrixValues(firstEye.x, firstEye.y, secondEye.x, secondEye.y)
+      ?: return null
+    val matrix = Matrix().apply { setValues(values) }
+    val patch = Bitmap.createBitmap(IMAGE_SIZE, IMAGE_SIZE, Bitmap.Config.ARGB_8888)
+    try {
+      val canvas = Canvas(patch)
+      canvas.drawColor(Color.BLACK)
+      canvas.drawBitmap(source, matrix, Paint(Paint.FILTER_BITMAP_FLAG))
+      return descriptorFromBitmap(patch)
+    } finally {
+      patch.recycle()
+    }
+  }
+
+  private fun extractLegacy(source: Bitmap, face: Face): FloatArray? {
+    val box = face.boundingBox
     val centerX = box.exactCenterX()
     val centerY = box.exactCenterY()
     var side = (max(box.width(), box.height()) * 1.5f).roundToInt()
@@ -103,7 +128,7 @@ internal object FaceFeatureExtractor {
 
       return descriptorFromBitmap(scaled)
     } finally {
-      cropped.recycle()
+      if (cropped !== source) cropped.recycle()
       aligned.recycle()
       scaled.recycle()
     }

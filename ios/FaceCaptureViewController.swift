@@ -615,8 +615,12 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     guard now - lastProbeAt >= 0.15 else {
       return
     }
-    guard let descriptor = extractor.extract(pixelBuffer: pixelBuffer, face: face) else {
-      updateUi("Improve lighting and hold still…", progress: currentLivenessProgress())
+    let format = enrolledTemplate?.format ?? .eyeAligned
+    guard let descriptor = extractor.extract(pixelBuffer: pixelBuffer, face: face, format: format) else {
+      let prompt = format == .eyeAligned
+        ? "Keep both eyes visible in even light"
+        : "Improve lighting and hold still…"
+      updateUi(prompt, progress: currentLivenessProgress())
       return
     }
 

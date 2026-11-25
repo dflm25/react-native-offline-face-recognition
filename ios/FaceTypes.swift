@@ -48,8 +48,14 @@ struct FaceCaptureOptions {
   static let defaultThreshold = 0.68
 }
 
+enum FaceDescriptorFormat: Int {
+  case legacy = 1
+  case eyeAligned = 2
+}
+
 struct FaceTemplate {
   let templateId: String
+  let format: FaceDescriptorFormat
   let descriptors: [[Float]]
   let createdAt: TimeInterval
 }

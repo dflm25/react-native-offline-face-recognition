@@ -33,7 +33,11 @@ final class FaceFeatureExtractor {
     return bins
   }()
 
-  func extract(pixelBuffer: CVPixelBuffer, face: VNFaceObservation) -> [Float]? {
+  func extract(
+    pixelBuffer: CVPixelBuffer,
+    face: VNFaceObservation,
+    format: FaceDescriptorFormat
+  ) -> [Float]? {
     let source = CIImage(cvPixelBuffer: pixelBuffer)
     let extent = source.extent
     guard extent.width >= 48, extent.height >= 48 else {
@@ -51,6 +55,30 @@ final class FaceFeatureExtractor {
       return nil
     }
 
+    let patch: CIImage
+    switch format {
+    case .legacy:
+      guard let legacyPatch = legacyPatch(source: source, face: face, rawRect: rawRect) else {
+        return nil
+      }
+      patch = legacyPatch
+    case .eyeAligned:
+      guard let landmarks = face.landmarks,
+        let firstEye = landmarks.leftEye?.normalizedPoints, !firstEye.isEmpty,
+        let secondEye = landmarks.rightEye?.normalizedPoints, !secondEye.isEmpty
+      else { return nil }
+      let transform = FaceEyeAlignment.transform(
+        firstEye: imagePoint(centroid(firstEye), in: rawRect),
+        secondEye: imagePoint(centroid(secondEye), in: rawRect)
+      )
+      guard let transform else { return nil }
+      patch = source.transformed(by: transform)
+    }
+    return renderDescriptor(from: patch)
+  }
+
+  private func legacyPatch(source: CIImage, face: VNFaceObservation, rawRect: CGRect) -> CIImage? {
+    let extent = source.extent
     var side = max(rawRect.width, rawRect.height) * 1.5
     side = min(side, min(extent.width, extent.height))
     guard side >= 48 else {
@@ -65,7 +93,7 @@ final class FaceFeatureExtractor {
     image = image.transformed(
       by: CGAffineTransform(translationX: -cropRect.minX, y: -cropRect.minY))
 
-    let roll = faceRoll(face: face, bbox: bbox, extent: extent.size)
+    let roll = faceRoll(face: face, bbox: face.boundingBox, extent: extent.size)
     let rotated = image.transformed(
       by: CGAffineTransform(translationX: side / 2, y: side / 2)
         .rotated(by: -roll)
@@ -77,32 +105,35 @@ final class FaceFeatureExtractor {
     }
     let scale = CGFloat(FaceFeatureExtractor.imageSize) / max(rotatedExtent.width, rotatedExtent.height)
     let scaled = rotated.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-    let centered = scaled.transformed(
+    return scaled.transformed(
       by: CGAffineTransform(
         translationX: CGFloat(FaceFeatureExtractor.imageSize) / 2 - scaled.extent.midX,
         y: CGFloat(FaceFeatureExtractor.imageSize) / 2 - scaled.extent.midY))
-    let background = CIImage(color: CIColor.black).cropped(
-      to: CGRect(x: 0, y: 0, width: FaceFeatureExtractor.imageSize, height: FaceFeatureExtractor.imageSize))
-    let finalImage = centered.composited(over: background)
+  }
 
-    var pixels = [UInt8](repeating: 0, count: FaceFeatureExtractor.imageSize * FaceFeatureExtractor.imageSize)
+  private func imagePoint(_ point: CGPoint, in rect: CGRect) -> CGPoint {
+    CGPoint(x: rect.minX + point.x * rect.width, y: rect.minY + point.y * rect.height)
+  }
+
+  private func renderDescriptor(from patch: CIImage) -> [Float]? {
+    let size = FaceFeatureExtractor.imageSize
+    let bounds = CGRect(x: 0, y: 0, width: size, height: size)
+    let background = CIImage(color: CIColor.black).cropped(to: bounds)
+    let finalImage = patch.composited(over: background)
+    var pixels = [UInt8](repeating: 0, count: size * size)
     pixels.withUnsafeMutableBytes { bytes in
       guard let base = bytes.baseAddress else { return }
       context.render(
         finalImage,
         toBitmap: base,
-        rowBytes: FaceFeatureExtractor.imageSize,
-        bounds: CGRect(
-          x: 0,
-          y: 0,
-          width: FaceFeatureExtractor.imageSize,
-          height: FaceFeatureExtractor.imageSize),
+        rowBytes: size,
+        bounds: bounds,
         format: .L8,
         colorSpace: grayColorSpace
       )
     }
 
-    guard FaceExposure.acceptable(pixels, size: FaceFeatureExtractor.imageSize) else {
+    guard FaceExposure.acceptable(pixels, size: size) else {
       return nil
     }
     return descriptor(from: pixels)

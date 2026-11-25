@@ -1,6 +1,6 @@
 {
   "name": "react-native-offline-face-recognition",
-  "version": "0.1.4",
+  "version": "0.1.6",
   "description": "Privacy-first, fully offline face enrollment and verification for React Native clock-in/clock-out flows.",
   "main": "./lib/module/index.js",
   "types": "./lib/typescript/src/index.d.ts",

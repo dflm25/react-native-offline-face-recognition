@@ -12,7 +12,6 @@ enum FaceTemplateStoreError: Error {
 final class FaceTemplateStore {
   private static let service = "com.reactnativeofflineface.template"
   private static let account = "primary"
-  private static let version = 1
 
   func hasTemplate() -> Bool {
     return load() != nil
@@ -46,6 +45,7 @@ final class FaceTemplateStore {
 
     let record = FaceTemplate(
       templateId: UUID().uuidString,
+      format: .eyeAligned,
       descriptors: descriptors.map { $0 },
       createdAt: Date().timeIntervalSince1970
     )
@@ -55,13 +55,15 @@ final class FaceTemplateStore {
       kSecAttrService as String: FaceTemplateStore.service,
       kSecAttrAccount as String: FaceTemplateStore.account,
     ]
-    SecItemDelete(baseQuery as CFDictionary)
-
-    var addQuery = baseQuery
-    addQuery[kSecValueData as String] = payload
-    addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-    addQuery[kSecAttrSynchronizable as String] = false
-    let status = SecItemAdd(addQuery as CFDictionary, nil)
+    let attributes = [kSecValueData as String: payload]
+    var status = SecItemUpdate(baseQuery as CFDictionary, attributes as CFDictionary)
+    if status == errSecItemNotFound {
+      var addQuery = baseQuery
+      addQuery[kSecValueData as String] = payload
+      addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+      addQuery[kSecAttrSynchronizable as String] = false
+      status = SecItemAdd(addQuery as CFDictionary, nil)
+    }
     guard status == errSecSuccess else {
       throw FaceTemplateStoreError.keychainFailure(status)
     }
@@ -82,7 +84,7 @@ final class FaceTemplateStore {
       encodeFloats(descriptor).base64EncodedString()
     }
     let object: [String: Any] = [
-      "version": FaceTemplateStore.version,
+      "version": template.format.rawValue,
       "templateId": template.templateId,
       "createdAt": template.createdAt,
       "platform": "ios",
@@ -96,7 +98,8 @@ final class FaceTemplateStore {
 
   private func decode(_ data: Data) -> FaceTemplate? {
     guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-      (object["version"] as? NSNumber)?.intValue == FaceTemplateStore.version,
+      let version = object["version"] as? Int,
+      let format = FaceDescriptorFormat(rawValue: version),
       let templateId = object["templateId"] as? String,
       !templateId.isEmpty,
       let encoded = object["descriptors"] as? [String],
@@ -119,6 +122,7 @@ final class FaceTemplateStore {
 
     return FaceTemplate(
       templateId: templateId,
+      format: format,
       descriptors: descriptors,
       createdAt: (object["createdAt"] as? NSNumber)?.doubleValue ?? 0
     )

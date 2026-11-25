@@ -138,6 +138,8 @@ jobs:
           /tmp/offline-face-liveness-tests
           swiftc ios/FaceApproachTracker.swift tests/approach/main.swift -o /tmp/offline-face-approach-tests
           /tmp/offline-face-approach-tests
+          swiftc ios/FaceEyeAlignment.swift tests/alignment/main.swift -o /tmp/offline-face-alignment-tests
+          /tmp/offline-face-alignment-tests
 
       - name: Setup
         uses: ./.github/actions/setup

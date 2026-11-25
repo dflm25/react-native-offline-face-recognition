@@ -221,8 +221,9 @@ for an unrecoverable bridge failure.
    pauses the challenge while they are detected. By default, this check is skipped.
 4. The user moves closer, then looks straight with their mouth closed and opens and closes it. The screen gives
    immediate feedback. This short, fixed challenge has not been validated against presentation attacks.
-5. On success, six frames are captured. Each face is aligned, converted to a 64×64 masked and
-   equalized grayscale patch, and reduced to a 1,520-value LBP/HOG histogram descriptor.
+5. On success, six frames are captured. For new enrollments, the centers of both eyes set the
+   position, rotation, and scale of a 64×64 grayscale patch, which is masked, equalized, and
+   reduced to a 1,520-value LBP/HOG histogram descriptor.
 6. Enrollment stores six descriptors in encrypted local storage. Verification compares six new
    descriptors against the enrolled set using block-wise histogram intersection.
 7. A boolean, score, and template ID cross the native bridge. If explicitly requested at registration,
@@ -234,14 +235,17 @@ The iOS privacy manifest declares no collected data types and no tracking.
 
 ## Matching and thresholds
 
+Verification uses the same alignment method that produced the stored template. Existing
+enrollments use their original alignment. A successful re-enrollment switches to eye alignment.
+
 The score is a histogram-intersection similarity in `[0, 1]`:
 
 - `1.0` identical descriptors
 - `>= 0.68` default acceptance
 - `< 0.68` mismatch
 
-The default was chosen for conservative clock-in use. Tune it against your own users, lighting and
-devices:
+Use the default as a starting point for testing. Calibrate it for the template format, devices,
+and capture conditions you plan to use:
 
 - **False accepts** (wrong person accepted): raise `threshold` (for example `0.70`).
 - **False rejects** (right person denied): lower `threshold` (for example `0.55`) and improve

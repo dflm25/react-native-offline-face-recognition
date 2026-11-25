@@ -595,8 +595,14 @@ class FaceCaptureActivity : ComponentActivity() {
     if (now - lastProbeAt < 150L) {
       return
     }
-    val descriptor = FaceFeatureExtractor.extract(bitmap, face) ?: run {
-      updateUi("Improve lighting and hold still…", lastLivenessState?.progress ?: 0f)
+    val format = enrolled?.format ?: FaceDescriptorFormat.EYE_ALIGNED
+    val descriptor = FaceFeatureExtractor.extract(bitmap, face, format) ?: run {
+      val prompt = if (format == FaceDescriptorFormat.EYE_ALIGNED) {
+        "Keep both eyes visible in even light"
+      } else {
+        "Improve lighting and hold still…"
+      }
+      updateUi(prompt, lastLivenessState?.progress ?: 0f)
       return
     }
     lastProbeAt = now
