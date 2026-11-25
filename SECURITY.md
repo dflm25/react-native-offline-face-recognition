@@ -29,7 +29,7 @@ hardware. Device compromise is out of scope.
 
 | Risk | Mitigation |
 | --- | --- |
-| Static photo | Active challenge requires two opposite head turns plus a blink or nod. |
+| Static photo | Active challenge requires two opposite head turns plus an open/close mouth action. |
 | Simple video replay | Challenge is sequential and time-bounded; one short loop is unlikely to satisfy it. |
 | Screenshots / screen recording (Android) | `FLAG_SECURE` on the capture activity. |
 | Template at rest | AES-256-GCM with a non-exportable Android Keystore key; iOS Keychain item with `WhenUnlockedThisDeviceOnly`. |

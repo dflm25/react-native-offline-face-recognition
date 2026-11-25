@@ -1,13 +1,14 @@
 import Foundation
 
-/// Same active challenge as Android: center -> turn -> center -> other turn -> close/open eyes.
+/// Active challenge: center -> turn -> center -> other turn -> open/close mouth.
 final class LivenessTracker {
   enum Stage {
     case center
     case turnOne
     case returnCenter
     case turnTwo
-    case blink
+    case openMouth
+    case closeMouth
     case passed
     case failed
   }
@@ -25,13 +26,9 @@ final class LivenessTracker {
   private var stage: Stage = .center
   private var centeredSince: TimeInterval = 0
   private var firstTurnDirection = 0
-  private var sawClosedEyes = false
-  private var blinkOpenBaseline: Float = 0.35
-  private var lastEyeOpen: Float?
-  private var lastPitch: Float?
-  private var blinkPitchBaseline: Float = 0
-  private var sawNod = false
-  private var missingEyeFrames = 0
+  private var mouthBaseline: Float = 0.10
+  private var lastMouthRatio: Float?
+  private var sawOpenMouth = false
 
   init(timeoutMs: Int = 20_000) {
     self.timeoutMs = timeoutMs
@@ -42,13 +39,9 @@ final class LivenessTracker {
     stage = .center
     centeredSince = 0
     firstTurnDirection = 0
-    sawClosedEyes = false
-    blinkOpenBaseline = 0.35
-    lastEyeOpen = nil
-    lastPitch = nil
-    blinkPitchBaseline = 0
-    sawNod = false
-    missingEyeFrames = 0
+    mouthBaseline = 0.10
+    lastMouthRatio = nil
+    sawOpenMouth = false
   }
 
   func finishNow() -> State {
@@ -58,8 +51,8 @@ final class LivenessTracker {
 
   /// - Parameters:
   ///   - yaw: face yaw in radians.
-  ///   - eyeOpenRatio: approximate eye height/width, or nil when unavailable.
-  func update(now: TimeInterval, yaw: Float?, pitch: Float?, eyeOpenRatio: Float?) -> State {
+  ///   - mouthOpenRatio: inner-lip height divided by mouth width, or nil.
+  func update(now: TimeInterval, yaw: Float?, mouthOpenRatio: Float?) -> State {
     if stage == .passed || stage == .failed {
       return state()
     }
@@ -71,16 +64,13 @@ final class LivenessTracker {
       return state()
     }
 
-    if let eyeOpenRatio {
-      lastEyeOpen = eyeOpenRatio
-    }
-    if let pitch {
-      lastPitch = pitch
+    if let mouthOpenRatio {
+      lastMouthRatio = mouthOpenRatio
     }
 
     switch stage {
     case .center:
-      let centered = (yaw != nil && abs(yaw!) <= 0.16) && (eyeOpenRatio == nil || eyeOpenRatio! >= 0.18)
+      let centered = yaw != nil && abs(yaw!) <= 0.16
       if centered {
         if centeredSince == 0 {
           centeredSince = now
@@ -104,40 +94,20 @@ final class LivenessTracker {
       if let yaw, abs(yaw) >= 0.32 {
         let direction = yaw >= 0 ? 1 : -1
         if direction == -firstTurnDirection {
-          blinkOpenBaseline = max(0.20, lastEyeOpen ?? 0.35)
-          blinkPitchBaseline = lastPitch ?? 0
-          stage = .blink
+          mouthBaseline = min(0.30, max(0.02, lastMouthRatio ?? 0.08))
+          stage = .openMouth
         }
       }
-    case .blink:
-      // A nod is a reliable alternative when a blink is missed (glasses,
-      // low light, or a very fast blink).
-      if let pitch {
-        let pitchDelta = abs(pitch - blinkPitchBaseline)
-        if pitchDelta >= 0.24 {
-          sawNod = true
-        } else if sawNod && pitchDelta <= 0.08 {
-          stage = .passed
-        }
+    case .openMouth:
+      let openThreshold = max(0.14, mouthBaseline + 0.06)
+      if let mouthOpenRatio, mouthOpenRatio >= openThreshold {
+        sawOpenMouth = true
+        stage = .closeMouth
       }
-
-      if stage != .passed {
-        let closedThreshold = max(0.18, blinkOpenBaseline * 0.72)
-        let openThreshold = max(0.22, blinkOpenBaseline * 0.88)
-        if let eyeOpenRatio {
-          missingEyeFrames = 0
-          if eyeOpenRatio <= closedThreshold {
-            sawClosedEyes = true
-          } else if sawClosedEyes && eyeOpenRatio >= openThreshold {
-            stage = .passed
-          }
-        } else {
-          // Vision can omit eye landmarks while the eyelids are closed.
-          missingEyeFrames += 1
-          if missingEyeFrames >= 1 {
-            sawClosedEyes = true
-          }
-        }
+    case .closeMouth:
+      let closeThreshold = max(0.08, mouthBaseline + 0.025)
+      if sawOpenMouth, let mouthOpenRatio, mouthOpenRatio <= closeThreshold {
+        stage = .passed
       }
     case .passed, .failed:
       break
@@ -163,9 +133,12 @@ final class LivenessTracker {
     case .turnTwo:
       progress = 0.66
       prompt = "Now turn to the other side"
-    case .blink:
-      progress = 0.85
-      prompt = "Blink once or nod your head"
+    case .openMouth:
+      progress = 0.82
+      prompt = "Open your mouth"
+    case .closeMouth:
+      progress = 0.92
+      prompt = "Now close your mouth"
     case .passed:
       progress = 1.0
       prompt = "Liveness confirmed"

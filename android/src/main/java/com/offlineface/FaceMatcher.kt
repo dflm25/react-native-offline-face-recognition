@@ -9,7 +9,7 @@ import kotlin.math.min
  * Each LBP/HOG cell histogram sums to 1, so intersection lies in [0, 1] and is
  * comparable across devices, lighting conditions and template versions.
  * For a probe sequence, the best match per probe is averaged to tolerate
- * transient blinks/head movement while still requiring several good frames.
+ * transient mouth/head movement while still requiring several good frames.
  */
 internal object FaceMatcher {
   private const val LBP_GRID = 4

@@ -39,6 +39,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
+import com.google.mlkit.vision.face.FaceContour
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetector
 import com.google.mlkit.vision.face.FaceDetectorOptions
@@ -315,7 +316,7 @@ class FaceCaptureActivity : ComponentActivity() {
             FaceDetectorOptions.Builder()
               .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
               .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-              .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+              .setContourMode(FaceDetectorOptions.CONTOUR_MODE_ALL)
               .setMinFaceSize(0.2f)
               .build()
           detector = FaceDetection.getClient(detectorOptions)
@@ -406,7 +407,7 @@ class FaceCaptureActivity : ComponentActivity() {
         resetLiveness(now)
       }
       if (now - noFaceSince > 600L) {
-        updateUi("Center your face in the oval", liveness?.update(now, null, null, null)?.progress ?: 0f)
+        updateUi("Center your face in the oval", liveness?.update(now, null, null)?.progress ?: 0f)
       }
       return
     }
@@ -430,14 +431,14 @@ class FaceCaptureActivity : ComponentActivity() {
     val widthRatio = box.width().toFloat() / bitmap.width
     val heightRatio = box.height().toFloat() / bitmap.height
     if (widthRatio < 0.20f || heightRatio < 0.20f) {
-      updateUi("Move a little closer", liveness?.update(now, null, null, null)?.progress ?: 0f)
+      updateUi("Move a little closer", liveness?.update(now, null, null)?.progress ?: 0f)
       return
     }
 
     val centerX = box.exactCenterX() / bitmap.width
     val centerY = box.exactCenterY() / bitmap.height
     if (centerX < 0.18f || centerX > 0.82f || centerY < 0.12f || centerY > 0.88f) {
-      updateUi("Center your face in the oval", liveness?.update(now, null, null, null)?.progress ?: 0f)
+      updateUi("Center your face in the oval", liveness?.update(now, null, null)?.progress ?: 0f)
       return
     }
     sawUsableFace = true
@@ -471,7 +472,7 @@ class FaceCaptureActivity : ComponentActivity() {
     }
 
     val tracker = liveness ?: return
-    val state = tracker.update(now, face.headEulerAngleY, face.headEulerAngleX, averageEyeOpen(face))
+    val state = tracker.update(now, face.headEulerAngleY, mouthOpenRatio(face))
     lastLivenessState = state
     if (state.failed) {
       finishFailure("liveness_failed", livenessPassed = false)
@@ -695,15 +696,33 @@ class FaceCaptureActivity : ComponentActivity() {
     cameraExecutor.shutdown()
   }
 
-  private fun averageEyeOpen(face: Face): Float? {
-    val left = face.leftEyeOpenProbability
-    val right = face.rightEyeOpenProbability
-    if (left == null && right == null) {
+  private fun mouthOpenRatio(face: Face): Float? {
+    val upperInner = face.getContour(FaceContour.UPPER_LIP_BOTTOM)?.points
+    val lowerInner = face.getContour(FaceContour.LOWER_LIP_TOP)?.points
+    val upper =
+      if (!upperInner.isNullOrEmpty() && !lowerInner.isNullOrEmpty()) {
+        upperInner
+      } else {
+        face.getContour(FaceContour.UPPER_LIP_TOP)?.points?.takeIf { it.isNotEmpty() }
+          ?: return null
+      }
+    val lower =
+      if (!upperInner.isNullOrEmpty() && !lowerInner.isNullOrEmpty()) {
+        lowerInner
+      } else {
+        face.getContour(FaceContour.LOWER_LIP_BOTTOM)?.points?.takeIf { it.isNotEmpty() }
+          ?: return null
+      }
+
+    val upperY = upper.maxOf { it.y }
+    val lowerY = lower.minOf { it.y }
+    val minX = minOf(upper.minOf { it.x }, lower.minOf { it.x })
+    val maxX = maxOf(upper.maxOf { it.x }, lower.maxOf { it.x })
+    val width = maxX - minX
+    if (width <= 0f) {
       return null
     }
-    if (left == null) return right
-    if (right == null) return left
-    return (left + right) / 2f
+    return ((lowerY - upperY) / width).coerceAtLeast(0f)
   }
 
   private fun rotate(source: android.graphics.Bitmap, degrees: Int): android.graphics.Bitmap {

@@ -491,7 +491,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
       }
       if now - noFaceSince > 0.6 {
         updateUi("Center your face in the oval", progress: livenessTracker?.update(
-          now: now, yaw: nil, pitch: nil, eyeOpenRatio: nil
+          now: now, yaw: nil, mouthOpenRatio: nil
         ).progress ?? 0)
       }
       return
@@ -546,8 +546,8 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
 
     if let tracker = livenessTracker {
       let yaw = estimatedYaw(face: face)
-      let eyeOpen = eyeOpenRatio(face: face)
-      let state = tracker.update(now: now, yaw: yaw, pitch: face.pitch?.floatValue, eyeOpenRatio: eyeOpen)
+      let mouth = mouthOpenRatio(face: face)
+      let state = tracker.update(now: now, yaw: yaw, mouthOpenRatio: mouth)
       lastLivenessState = state
       if state.failed {
         finish(faceResult(success: false, livenessPassed: false, error: .livenessFailed))
@@ -679,24 +679,18 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     return asin(Float(clamped))
   }
 
-  private func eyeOpenRatio(face: VNFaceObservation) -> Float? {
+  private func mouthOpenRatio(face: VNFaceObservation) -> Float? {
     guard let landmarks = face.landmarks else {
       return nil
     }
-    let left = eyeAspectRatio(landmarks.leftEye?.normalizedPoints)
-    let right = eyeAspectRatio(landmarks.rightEye?.normalizedPoints)
-    if left == nil && right == nil {
-      return nil
-    }
-    if left == nil { return right }
-    if right == nil { return left }
-    return (left! + right!) / 2
-  }
-
-  private func eyeAspectRatio(_ points: [CGPoint]?) -> Float? {
+    let inner = landmarks.innerLips?.normalizedPoints
+    let points = (inner?.count ?? 0) >= 4
+      ? inner
+      : landmarks.outerLips?.normalizedPoints
     guard let points, points.count >= 4 else {
       return nil
     }
+
     var minX = CGFloat.greatestFiniteMagnitude
     var maxX = -CGFloat.greatestFiniteMagnitude
     var minY = CGFloat.greatestFiniteMagnitude

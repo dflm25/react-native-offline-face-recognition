@@ -8,9 +8,10 @@ import kotlin.math.sign
  * Active liveness state machine.
  *
  * Challenge: look straight -> turn head to one side -> return -> turn to the
- * other side -> briefly close and open the eyes. A static photo, a still screen
- * image and a simple looped clip cannot complete a coherent two-sided turn plus
- * an eye close/open within the timing window. This is a deterrent, not a certified PAD implementation.
+ * other side -> open the mouth -> close it. A static photo, a still screen image
+ * and a simple looped clip cannot complete the coherent sequence within the
+ * timing window. The mouth action is easier to detect than a fast blink or a
+ * small nod, especially with glasses or in low light.
  */
 internal class LivenessTracker(
   private val timeoutMs: Long = 20_000L,
@@ -20,7 +21,8 @@ internal class LivenessTracker(
     TURN_ONE,
     RETURN_CENTER,
     TURN_TWO,
-    BLINK,
+    OPEN_MOUTH,
+    CLOSE_MOUTH,
     PASSED,
     FAILED,
   }
@@ -37,26 +39,18 @@ internal class LivenessTracker(
   private var stage = Stage.CENTER
   private var centeredSince = 0L
   private var firstTurnDirection = 0
-  private var sawClosedEyes = false
-  private var blinkOpenBaseline = 0.35f
-  private var lastEyeOpen: Float? = null
-  private var lastPitch: Float? = null
-  private var blinkPitchBaseline = 0f
-  private var sawNod = false
-  private var missingEyeFrames = 0
+  private var mouthBaseline = 0.10f
+  private var lastMouthRatio: Float? = null
+  private var sawOpenMouth = false
 
   fun restart(now: Long) {
     startedAt = now
     stage = Stage.CENTER
     centeredSince = 0L
     firstTurnDirection = 0
-    sawClosedEyes = false
-    blinkOpenBaseline = 0.35f
-    lastEyeOpen = null
-    lastPitch = null
-    blinkPitchBaseline = 0f
-    sawNod = false
-    missingEyeFrames = 0
+    mouthBaseline = 0.10f
+    lastMouthRatio = null
+    sawOpenMouth = false
   }
 
   fun finishNow(): State {
@@ -66,14 +60,9 @@ internal class LivenessTracker(
 
   /**
    * @param yawDegrees Face yaw in degrees, or null when not available.
-   * @param eyeOpenAverage Average ML Kit eye-open probability, or null.
+   * @param mouthOpenRatio Inner-lip height divided by mouth width, or null.
    */
-  fun update(
-    now: Long,
-    yawDegrees: Float?,
-    pitchDegrees: Float?,
-    eyeOpenAverage: Float?,
-  ): State {
+  fun update(now: Long, yawDegrees: Float?, mouthOpenRatio: Float?): State {
     if (stage == Stage.PASSED || stage == Stage.FAILED) {
       return state()
     }
@@ -86,18 +75,14 @@ internal class LivenessTracker(
     }
 
     val yaw = yawDegrees?.takeIf { it.isFinite() }
-    val pitch = pitchDegrees?.takeIf { it.isFinite() }
-    val eyesOpen = eyeOpenAverage?.takeIf { it.isFinite() }
-    if (eyesOpen != null) {
-      lastEyeOpen = eyesOpen
-    }
-    if (pitch != null) {
-      lastPitch = pitch
+    val mouth = mouthOpenRatio?.takeIf { it.isFinite() }
+    if (mouth != null) {
+      lastMouthRatio = mouth
     }
 
     when (stage) {
       Stage.CENTER -> {
-        val centered = yaw != null && abs(yaw) <= 9f && (eyesOpen == null || eyesOpen >= 0.45f)
+        val centered = yaw != null && abs(yaw) <= 9f
         if (centered) {
           if (centeredSince == 0L) centeredSince = now
           if (now - centeredSince >= 550L) {
@@ -120,40 +105,21 @@ internal class LivenessTracker(
       }
       Stage.TURN_TWO -> {
         if (yaw != null && abs(yaw) >= 18f && yaw.sign.toInt() == -firstTurnDirection) {
-          blinkOpenBaseline = max(0.20f, lastEyeOpen ?: 0.35f)
-          blinkPitchBaseline = lastPitch ?: 0f
-          stage = Stage.BLINK
+          mouthBaseline = (lastMouthRatio ?: 0.08f).coerceIn(0.02f, 0.30f)
+          stage = Stage.OPEN_MOUTH
         }
       }
-      Stage.BLINK -> {
-        // Nodding is an alternative that is much more reliable than a fast
-        // blink, especially with glasses or in low light.
-        if (pitch != null) {
-          val pitchDelta = abs(pitch - blinkPitchBaseline)
-          if (pitchDelta >= 14f) {
-            sawNod = true
-          } else if (sawNod && pitchDelta <= 5f) {
-            stage = Stage.PASSED
-          }
+      Stage.OPEN_MOUTH -> {
+        val openThreshold = max(0.14f, mouthBaseline + 0.06f)
+        if (mouth != null && mouth >= openThreshold) {
+          sawOpenMouth = true
+          stage = Stage.CLOSE_MOUTH
         }
-
-        if (stage != Stage.PASSED) {
-          val closedThreshold = max(0.18f, blinkOpenBaseline * 0.72f)
-          val openThreshold = max(0.22f, blinkOpenBaseline * 0.88f)
-          if (eyesOpen != null) {
-            missingEyeFrames = 0
-            if (eyesOpen <= closedThreshold) {
-              sawClosedEyes = true
-            } else if (sawClosedEyes && eyesOpen >= openThreshold) {
-              stage = Stage.PASSED
-            }
-          } else {
-            // Vision/ML Kit can omit eye landmarks while the eyelids are closed.
-            missingEyeFrames++
-            if (missingEyeFrames >= 1) {
-              sawClosedEyes = true
-            }
-          }
+      }
+      Stage.CLOSE_MOUTH -> {
+        val closeThreshold = max(0.08f, mouthBaseline + 0.025f)
+        if (sawOpenMouth && mouth != null && mouth <= closeThreshold) {
+          stage = Stage.PASSED
         }
       }
       Stage.PASSED, Stage.FAILED -> Unit
@@ -169,7 +135,8 @@ internal class LivenessTracker(
         Stage.TURN_ONE -> 0.30f
         Stage.RETURN_CENTER -> 0.48f
         Stage.TURN_TWO -> 0.66f
-        Stage.BLINK -> 0.85f
+        Stage.OPEN_MOUTH -> 0.82f
+        Stage.CLOSE_MOUTH -> 0.92f
         Stage.PASSED -> 1f
         Stage.FAILED -> 1f
       }
@@ -179,7 +146,8 @@ internal class LivenessTracker(
         Stage.TURN_ONE -> "Slowly turn your head to one side"
         Stage.RETURN_CENTER -> "Look straight again"
         Stage.TURN_TWO -> "Now turn to the other side"
-        Stage.BLINK -> "Blink once or nod your head"
+        Stage.OPEN_MOUTH -> "Open your mouth"
+        Stage.CLOSE_MOUTH -> "Now close your mouth"
         Stage.PASSED -> "Liveness confirmed"
         Stage.FAILED -> "Liveness check failed"
       }
