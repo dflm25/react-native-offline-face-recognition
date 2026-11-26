@@ -7,6 +7,11 @@ import Vision
 /// Android implementation. Only a masked 64x64 grayscale patch is analyzed;
 /// no image is persisted or handed back to JS.
 final class FaceFeatureExtractor {
+  enum CaptureError: Error {
+    case invalidFrame
+    case poorLighting
+  }
+
   static let descriptorSize = 1_520
   static let imageSize = 64
 
@@ -37,11 +42,11 @@ final class FaceFeatureExtractor {
     pixelBuffer: CVPixelBuffer,
     face: VNFaceObservation,
     format: FaceDescriptorFormat
-  ) -> [Float]? {
+  ) -> Result<[Float], CaptureError> {
     let source = CIImage(cvPixelBuffer: pixelBuffer)
     let extent = source.extent
     guard extent.width >= 48, extent.height >= 48 else {
-      return nil
+      return .failure(.invalidFrame)
     }
 
     let bbox = face.boundingBox
@@ -52,29 +57,29 @@ final class FaceFeatureExtractor {
       height: bbox.height * extent.height
     )
     guard rawRect.width >= 24, rawRect.height >= 24 else {
-      return nil
+      return .failure(.invalidFrame)
     }
 
     let patch: CIImage
     switch format {
     case .legacy:
       guard let legacyPatch = legacyPatch(source: source, face: face, rawRect: rawRect) else {
-        return nil
+        return .failure(.invalidFrame)
       }
       patch = legacyPatch
-    case .eyeAligned:
+    case .eyeAligned, .lightingNormalized:
       guard let landmarks = face.landmarks,
         let firstEye = landmarks.leftEye?.normalizedPoints, !firstEye.isEmpty,
         let secondEye = landmarks.rightEye?.normalizedPoints, !secondEye.isEmpty
-      else { return nil }
+      else { return .failure(.invalidFrame) }
       let transform = FaceEyeAlignment.transform(
         firstEye: imagePoint(centroid(firstEye), in: rawRect),
         secondEye: imagePoint(centroid(secondEye), in: rawRect)
       )
-      guard let transform else { return nil }
+      guard let transform else { return .failure(.invalidFrame) }
       patch = source.transformed(by: transform)
     }
-    return renderDescriptor(from: patch)
+    return renderDescriptor(from: patch, normalizeLighting: format == .lightingNormalized)
   }
 
   private func legacyPatch(source: CIImage, face: VNFaceObservation, rawRect: CGRect) -> CIImage? {
@@ -115,7 +120,7 @@ final class FaceFeatureExtractor {
     CGPoint(x: rect.minX + point.x * rect.width, y: rect.minY + point.y * rect.height)
   }
 
-  private func renderDescriptor(from patch: CIImage) -> [Float]? {
+  private func renderDescriptor(from patch: CIImage, normalizeLighting: Bool) -> Result<[Float], CaptureError> {
     let size = FaceFeatureExtractor.imageSize
     let bounds = CGRect(x: 0, y: 0, width: size, height: size)
     let background = CIImage(color: CIColor.black).cropped(to: bounds)
@@ -133,10 +138,13 @@ final class FaceFeatureExtractor {
       )
     }
 
-    guard FaceExposure.acceptable(pixels, size: size) else {
-      return nil
+    guard FaceExposure.acceptable(pixels, size: size, checkSides: normalizeLighting) else {
+      return .failure(.poorLighting)
     }
-    return descriptor(from: pixels)
+    guard let descriptor = descriptor(from: pixels, normalizeLighting: normalizeLighting) else {
+      return .failure(.invalidFrame)
+    }
+    return .success(descriptor)
   }
 
   private func faceRoll(face: VNFaceObservation, bbox: CGRect, extent: CGSize) -> CGFloat {
@@ -179,7 +187,7 @@ final class FaceFeatureExtractor {
     return CGPoint(x: x / CGFloat(points.count), y: y / CGFloat(points.count))
   }
 
-  private func descriptor(from source: [UInt8]) -> [Float]? {
+  private func descriptor(from source: [UInt8], normalizeLighting: Bool) -> [Float]? {
     let size = FaceFeatureExtractor.imageSize
     var gray = [Int](repeating: 0, count: source.count)
     var mask = [Bool](repeating: false, count: source.count)
@@ -207,7 +215,11 @@ final class FaceFeatureExtractor {
       return nil
     }
 
-    equalize(&gray, mask: mask)
+    if normalizeLighting {
+      FaceLighting.normalize(&gray, mask: mask, size: size)
+    } else {
+      equalize(&gray, mask: mask)
+    }
     var descriptor = [Float](repeating: 0, count: FaceFeatureExtractor.descriptorSize)
     computeLbp(gray, mask: mask, descriptor: &descriptor)
     computeHog(gray, mask: mask, descriptor: &descriptor)

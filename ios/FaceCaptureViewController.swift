@@ -574,7 +574,9 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
         finish(faceResult(success: false, livenessPassed: false, error: .livenessFailed))
         return
       }
-      updateUi(state.prompt, progress: state.progress)
+      if !state.passed {
+        updateUi(state.prompt, progress: state.progress)
+      }
       if state.passed {
         guard let yaw, yaw.isFinite, abs(yaw) <= 0.16 else {
           stableSince = 0
@@ -615,12 +617,19 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     guard now - lastProbeAt >= 0.15 else {
       return
     }
-    let format = enrolledTemplate?.format ?? .eyeAligned
-    guard let descriptor = extractor.extract(pixelBuffer: pixelBuffer, face: face, format: format) else {
-      let prompt = format == .eyeAligned
-        ? "Keep both eyes visible in even light"
-        : "Improve lighting and hold still…"
-      updateUi(prompt, progress: currentLivenessProgress())
+    let format = enrolledTemplate?.format ?? .lightingNormalized
+    let descriptor: [Float]
+    switch extractor.extract(pixelBuffer: pixelBuffer, face: face, format: format) {
+    case .success(let sample):
+      descriptor = sample
+    case .failure(.poorLighting):
+      updateUi("Face an even light source", progress: currentLivenessProgress())
+      return
+    case .failure(.invalidFrame):
+      updateUi(
+        format == .legacy ? "Improve lighting and hold still…" : "Keep both eyes visible in even light",
+        progress: currentLivenessProgress()
+      )
       return
     }
 

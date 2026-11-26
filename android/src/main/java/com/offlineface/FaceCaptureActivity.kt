@@ -509,7 +509,9 @@ class FaceCaptureActivity : ComponentActivity() {
       finishFailure("liveness_failed", livenessPassed = false)
       return
     }
-    updateUi(state.prompt, state.progress)
+    if (!state.passed) {
+      updateUi(state.prompt, state.progress)
+    }
     if (state.passed) {
       if (!face.headEulerAngleY.isFinite() || abs(face.headEulerAngleY) > 10f) {
         stableSince = 0L
@@ -595,15 +597,23 @@ class FaceCaptureActivity : ComponentActivity() {
     if (now - lastProbeAt < 150L) {
       return
     }
-    val format = enrolled?.format ?: FaceDescriptorFormat.EYE_ALIGNED
-    val descriptor = FaceFeatureExtractor.extract(bitmap, face, format) ?: run {
-      val prompt = if (format == FaceDescriptorFormat.EYE_ALIGNED) {
-        "Keep both eyes visible in even light"
-      } else {
-        "Improve lighting and hold still…"
+    val format = enrolled?.format ?: FaceDescriptorFormat.LIGHTING_NORMALIZED
+    val progressBeforeCapture = lastLivenessState?.progress ?: 0f
+    val descriptor = when (val result = FaceFeatureExtractor.extract(bitmap, face, format)) {
+      is FaceFeatureExtractor.CaptureResult.Sample -> result.descriptor
+      FaceFeatureExtractor.CaptureResult.PoorLighting -> {
+        updateUi("Face an even light source", progressBeforeCapture)
+        return
       }
-      updateUi(prompt, lastLivenessState?.progress ?: 0f)
-      return
+      FaceFeatureExtractor.CaptureResult.InvalidFrame -> {
+        val prompt = if (format == FaceDescriptorFormat.LEGACY) {
+          "Improve lighting and hold still…"
+        } else {
+          "Keep both eyes visible in even light"
+        }
+        updateUi(prompt, progressBeforeCapture)
+        return
+      }
     }
     lastProbeAt = now
     probes.add(descriptor)

@@ -140,6 +140,8 @@ jobs:
           /tmp/offline-face-approach-tests
           swiftc ios/FaceEyeAlignment.swift tests/alignment/main.swift -o /tmp/offline-face-alignment-tests
           /tmp/offline-face-alignment-tests
+          swiftc ios/FaceLighting.swift ios/FaceExposure.swift tests/lighting/main.swift -o /tmp/offline-face-lighting-tests
+          /tmp/offline-face-lighting-tests
 
       - name: Setup
         uses: ./.github/actions/setup

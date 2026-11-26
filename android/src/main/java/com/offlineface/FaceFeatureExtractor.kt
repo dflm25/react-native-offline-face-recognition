@@ -27,6 +27,12 @@ import kotlin.math.sqrt
  * network; see SECURITY.md for the threat model.
  */
 internal object FaceFeatureExtractor {
+  sealed interface CaptureResult {
+    data class Sample(val descriptor: FloatArray) : CaptureResult
+    data object InvalidFrame : CaptureResult
+    data object PoorLighting : CaptureResult
+  }
+
   const val IMAGE_SIZE = 64
 
   private const val LBP_GRID = 4
@@ -55,47 +61,48 @@ internal object FaceFeatureExtractor {
     bins
   }
 
-  fun extract(source: Bitmap, face: Face, format: FaceDescriptorFormat): FloatArray? {
+  fun extract(source: Bitmap, face: Face, format: FaceDescriptorFormat): CaptureResult {
     if (source.isRecycled || source.width < 48 || source.height < 48) {
-      return null
+      return CaptureResult.InvalidFrame
     }
 
     val box = face.boundingBox
     if (box.width() < 24 || box.height() < 24) {
-      return null
+      return CaptureResult.InvalidFrame
     }
 
     return when (format) {
       FaceDescriptorFormat.LEGACY -> extractLegacy(source, face)
-      FaceDescriptorFormat.EYE_ALIGNED -> extractEyeAligned(source, face)
+      FaceDescriptorFormat.EYE_ALIGNED -> extractEyeAligned(source, face, normalizeLighting = false)
+      FaceDescriptorFormat.LIGHTING_NORMALIZED -> extractEyeAligned(source, face, normalizeLighting = true)
     }
   }
 
-  private fun extractEyeAligned(source: Bitmap, face: Face): FloatArray? {
-    val firstEye = face.getLandmark(FaceLandmark.LEFT_EYE)?.position ?: return null
-    val secondEye = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position ?: return null
+  private fun extractEyeAligned(source: Bitmap, face: Face, normalizeLighting: Boolean): CaptureResult {
+    val firstEye = face.getLandmark(FaceLandmark.LEFT_EYE)?.position ?: return CaptureResult.InvalidFrame
+    val secondEye = face.getLandmark(FaceLandmark.RIGHT_EYE)?.position ?: return CaptureResult.InvalidFrame
     val values = FaceEyeAlignment.matrixValues(firstEye.x, firstEye.y, secondEye.x, secondEye.y)
-      ?: return null
+      ?: return CaptureResult.InvalidFrame
     val matrix = Matrix().apply { setValues(values) }
     val patch = Bitmap.createBitmap(IMAGE_SIZE, IMAGE_SIZE, Bitmap.Config.ARGB_8888)
     try {
       val canvas = Canvas(patch)
       canvas.drawColor(Color.BLACK)
       canvas.drawBitmap(source, matrix, Paint(Paint.FILTER_BITMAP_FLAG))
-      return descriptorFromBitmap(patch)
+      return descriptorFromBitmap(patch, normalizeLighting)
     } finally {
       patch.recycle()
     }
   }
 
-  private fun extractLegacy(source: Bitmap, face: Face): FloatArray? {
+  private fun extractLegacy(source: Bitmap, face: Face): CaptureResult {
     val box = face.boundingBox
     val centerX = box.exactCenterX()
     val centerY = box.exactCenterY()
     var side = (max(box.width(), box.height()) * 1.5f).roundToInt()
     side = min(side, min(source.width, source.height))
     if (side < 48) {
-      return null
+      return CaptureResult.InvalidFrame
     }
 
     val left = (centerX - side / 2f).roundToInt().coerceIn(0, source.width - side)
@@ -108,7 +115,7 @@ internal object FaceFeatureExtractor {
       rollDegrees = Math.toDegrees(atan2((rightEye.y - leftEye.y).toDouble(), (rightEye.x - leftEye.x).toDouble())).toFloat()
     }
     if (rollDegrees.isNaN() || abs(rollDegrees) > 45f) {
-      return null
+      return CaptureResult.InvalidFrame
     }
 
     val cropped = Bitmap.createBitmap(source, left, top, side, side)
@@ -126,7 +133,7 @@ internal object FaceFeatureExtractor {
       scaleCanvas.drawColor(Color.BLACK)
       scaleCanvas.drawBitmap(aligned, scaleMatrix, Paint(Paint.FILTER_BITMAP_FLAG))
 
-      return descriptorFromBitmap(scaled)
+      return descriptorFromBitmap(scaled, normalizeLighting = false)
     } finally {
       if (cropped !== source) cropped.recycle()
       aligned.recycle()
@@ -134,7 +141,7 @@ internal object FaceFeatureExtractor {
     }
   }
 
-  private fun descriptorFromBitmap(bitmap: Bitmap): FloatArray? {
+  private fun descriptorFromBitmap(bitmap: Bitmap, normalizeLighting: Boolean): CaptureResult {
     val pixels = IntArray(IMAGE_SIZE * IMAGE_SIZE)
     bitmap.getPixels(pixels, 0, IMAGE_SIZE, 0, 0, IMAGE_SIZE, IMAGE_SIZE)
 
@@ -165,22 +172,28 @@ internal object FaceFeatureExtractor {
         }
       }
     }
-    if (inside < IMAGE_SIZE * IMAGE_SIZE / 4 || maxGray - minGray < 12 ||
-      !FaceExposure.acceptable(gray, IMAGE_SIZE)) {
-      return null
+    if (!FaceExposure.acceptable(gray, IMAGE_SIZE, checkSides = normalizeLighting)) {
+      return CaptureResult.PoorLighting
+    }
+    if (inside < IMAGE_SIZE * IMAGE_SIZE / 4 || maxGray - minGray < 12) {
+      return CaptureResult.InvalidFrame
     }
 
-    equalize(gray, mask)
+    if (normalizeLighting) {
+      FaceLighting.normalize(gray, mask, IMAGE_SIZE)
+    } else {
+      equalize(gray, mask)
+    }
     val descriptor = FloatArray(DESCRIPTOR_SIZE)
     computeLbp(gray, mask, descriptor)
     computeHog(gray, mask, descriptor)
 
     for (index in descriptor.indices) {
       if (!descriptor[index].isFinite()) {
-        return null
+        return CaptureResult.InvalidFrame
       }
     }
-    return descriptor
+    return CaptureResult.Sample(descriptor)
   }
 
   private fun equalize(gray: IntArray, mask: BooleanArray) {

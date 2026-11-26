@@ -222,8 +222,9 @@ for an unrecoverable bridge failure.
 4. The user moves closer, then looks straight with their mouth closed and opens and closes it. The screen gives
    immediate feedback. This short, fixed challenge has not been validated against presentation attacks.
 5. On success, six frames are captured. For new enrollments, the centers of both eyes set the
-   position, rotation, and scale of a 64×64 grayscale patch, which is masked, equalized, and
-   reduced to a 1,520-value LBP/HOG histogram descriptor.
+   position, rotation, and scale of a 64×64 grayscale patch. The library normalizes brightness and
+   contrast locally before computing a 1,520-value LBP/HOG descriptor. If one side of the face is
+   heavily underexposed or overexposed, the capture screen asks for more even lighting.
 6. Enrollment stores six descriptors in encrypted local storage. Verification compares six new
    descriptors against the enrolled set using block-wise histogram intersection.
 7. A boolean, score, and template ID cross the native bridge. If explicitly requested at registration,
@@ -235,8 +236,8 @@ The iOS privacy manifest declares no collected data types and no tracking.
 
 ## Matching and thresholds
 
-Verification uses the same alignment method that produced the stored template. Existing
-enrollments use their original alignment. A successful re-enrollment switches to eye alignment.
+Verification uses the alignment and lighting method that produced the stored template. Existing
+enrollments keep their original processing until a successful re-enrollment.
 
 The score is a histogram-intersection similarity in `[0, 1]`:
 

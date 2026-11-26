@@ -45,7 +45,7 @@ final class FaceTemplateStore {
 
     let record = FaceTemplate(
       templateId: UUID().uuidString,
-      format: .eyeAligned,
+      format: .lightingNormalized,
       descriptors: descriptors.map { $0 },
       createdAt: Date().timeIntervalSince1970
     )

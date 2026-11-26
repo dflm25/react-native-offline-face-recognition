@@ -76,7 +76,7 @@ internal class FaceTemplateStore(context: Context) {
       val record =
         FaceTemplateRecord(
           templateId = UUID.randomUUID().toString(),
-          format = FaceDescriptorFormat.EYE_ALIGNED,
+          format = FaceDescriptorFormat.LIGHTING_NORMALIZED,
           descriptors = descriptors.map { it.copyOf() },
           createdAt = System.currentTimeMillis(),
         )
