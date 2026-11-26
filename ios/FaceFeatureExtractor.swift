@@ -10,6 +10,7 @@ final class FaceFeatureExtractor {
   enum CaptureError: Error {
     case invalidFrame
     case poorLighting
+    case modelUnavailable
   }
 
   static let descriptorSize = 1_520
@@ -67,7 +68,7 @@ final class FaceFeatureExtractor {
         return .failure(.invalidFrame)
       }
       patch = legacyPatch
-    case .eyeAligned, .lightingNormalized:
+    case .eyeAligned, .lightingNormalized, .faceApi:
       guard let landmarks = face.landmarks,
         let firstEye = landmarks.leftEye?.normalizedPoints, !firstEye.isEmpty,
         let secondEye = landmarks.rightEye?.normalizedPoints, !secondEye.isEmpty
@@ -79,7 +80,7 @@ final class FaceFeatureExtractor {
       guard let transform else { return .failure(.invalidFrame) }
       patch = source.transformed(by: transform)
     }
-    return renderDescriptor(from: patch, normalizeLighting: format == .lightingNormalized)
+    return renderDescriptor(from: patch, format: format)
   }
 
   private func legacyPatch(source: CIImage, face: VNFaceObservation, rawRect: CGRect) -> CIImage? {
@@ -120,7 +121,7 @@ final class FaceFeatureExtractor {
     CGPoint(x: rect.minX + point.x * rect.width, y: rect.minY + point.y * rect.height)
   }
 
-  private func renderDescriptor(from patch: CIImage, normalizeLighting: Bool) -> Result<[Float], CaptureError> {
+  private func renderDescriptor(from patch: CIImage, format: FaceDescriptorFormat) -> Result<[Float], CaptureError> {
     let size = FaceFeatureExtractor.imageSize
     let bounds = CGRect(x: 0, y: 0, width: size, height: size)
     let background = CIImage(color: CIColor.black).cropped(to: bounds)
@@ -138,8 +139,16 @@ final class FaceFeatureExtractor {
       )
     }
 
-    guard FaceExposure.acceptable(pixels, size: size, checkSides: normalizeLighting) else {
+    let normalizeLighting = format == .lightingNormalized
+    guard FaceExposure.acceptable(pixels, size: size, checkSides: normalizeLighting || format == .faceApi) else {
       return .failure(.poorLighting)
+    }
+    if format == .faceApi {
+      do {
+        return .success(try FaceApiEmbedding.extract(from: patch, context: context))
+      } catch {
+        return .failure(.modelUnavailable)
+      }
     }
     guard let descriptor = descriptor(from: pixels, normalizeLighting: normalizeLighting) else {
       return .failure(.invalidFrame)

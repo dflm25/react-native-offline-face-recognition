@@ -30,6 +30,10 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
   private var timeoutWorkItem: DispatchWorkItem?
   private var enrolledTemplate: FaceTemplate?
   private var probes: [[Float]] = []
+  private let inferenceQueue = DispatchQueue(label: "com.offlineface.inference", qos: .userInitiated)
+  private var inferenceInFlight = false
+  private var captureGeneration = 0
+  private lazy var registrationFormat = FaceDescriptorFormat.registrationFormat
   private var registrationPhoto: String?
   private var lastLivenessState: LivenessTracker.State?
   private let approachTracker = FaceApproachTracker()
@@ -617,13 +621,42 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     guard now - lastProbeAt >= 0.15 else {
       return
     }
-    let format = enrolledTemplate?.format ?? .lightingNormalized
+    let format = enrolledTemplate?.format ?? registrationFormat
+    if format == .faceApi {
+      guard !inferenceInFlight else { return }
+      inferenceInFlight = true
+      let generation = captureGeneration
+      inferenceQueue.async { [weak self] in
+        guard let self, !self.isFinished() else { return }
+        let result = self.extractor.extract(pixelBuffer: pixelBuffer, face: face, format: format)
+        DispatchQueue.main.async {
+          self.inferenceInFlight = false
+          guard !self.isFinished(), self.captureGeneration == generation else { return }
+          self.acceptProbe(result, format: format, pixelBuffer: pixelBuffer, face: face, now: now)
+        }
+      }
+      return
+    }
+    let result = extractor.extract(pixelBuffer: pixelBuffer, face: face, format: format)
+    acceptProbe(result, format: format, pixelBuffer: pixelBuffer, face: face, now: now)
+  }
+
+  private func acceptProbe(
+    _ result: Result<[Float], FaceFeatureExtractor.CaptureError>,
+    format: FaceDescriptorFormat,
+    pixelBuffer: CVPixelBuffer,
+    face: VNFaceObservation,
+    now: CFTimeInterval
+  ) {
     let descriptor: [Float]
-    switch extractor.extract(pixelBuffer: pixelBuffer, face: face, format: format) {
+    switch result {
     case .success(let sample):
       descriptor = sample
     case .failure(.poorLighting):
       updateUi("Face an even light source", progress: currentLivenessProgress())
+      return
+    case .failure(.modelUnavailable):
+      finish(FaceCaptureError.notSupported.result)
       return
     case .failure(.invalidFrame):
       updateUi(
@@ -657,7 +690,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
 
     if mode == "register" {
       do {
-        let template = try store.save(descriptors: probes)
+        let template = try store.save(descriptors: probes, format: registrationFormat)
         finish(
           faceResult(
             success: true,
@@ -676,9 +709,21 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
       finish(FaceCaptureError.noTemplate.result)
       return
     }
-    let score = FaceMatcher.score(template: enrolled.descriptors, probes: probes)
+    let score: Double
+    let matched: Bool
+    if enrolled.format == .faceApi {
+      guard let distance = FaceApiMatcher.meanDistance(template: enrolled.descriptors, probes: probes) else {
+        finish(FaceCaptureError.unknownError.result)
+        return
+      }
+      score = max(0, 1 - distance)
+      matched = distance < FaceApiMatcher.maximumDistance
+    } else {
+      score = FaceMatcher.score(template: enrolled.descriptors, probes: probes)
+      matched = score >= options.threshold
+    }
     let livenessPassed = options.requireLiveness ? (lastLivenessState?.passed ?? false) : nil
-    if score >= options.threshold {
+    if matched {
       finish(faceResult(success: true, score: score, livenessPassed: livenessPassed))
     } else {
       finish(
@@ -693,6 +738,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
   }
 
   private func resetLiveness(now: CFTimeInterval) {
+    captureGeneration += 1
     registrationPhoto = nil
     approachTracker.reset()
     probes.removeAll()

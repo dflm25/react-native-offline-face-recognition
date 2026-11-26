@@ -52,6 +52,16 @@ enum FaceDescriptorFormat: Int {
   case legacy = 1
   case eyeAligned = 2
   case lightingNormalized = 3
+  case faceApi = 4
+
+  var descriptorSize: Int {
+    self == .faceApi ? 128 : 1_520
+  }
+
+  static var registrationFormat: Self {
+    Bundle.main.object(forInfoDictionaryKey: "OfflineFaceExperimentFaceApi") as? Bool == true
+      ? .faceApi : .lightingNormalized
+  }
 }
 
 struct FaceTemplate {

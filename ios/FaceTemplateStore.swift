@@ -36,16 +36,16 @@ final class FaceTemplateStore {
     return decode(data)
   }
 
-  func save(descriptors: [[Float]]) throws -> FaceTemplate {
+  func save(descriptors: [[Float]], format: FaceDescriptorFormat) throws -> FaceTemplate {
     guard !descriptors.isEmpty,
-      descriptors.allSatisfy({ $0.count == FaceFeatureExtractor.descriptorSize })
+      descriptors.allSatisfy({ $0.count == format.descriptorSize })
     else {
       throw FaceTemplateStoreError.encodingFailed
     }
 
     let record = FaceTemplate(
       templateId: UUID().uuidString,
-      format: .lightingNormalized,
+      format: format,
       descriptors: descriptors.map { $0 },
       createdAt: Date().timeIntervalSince1970
     )
@@ -111,7 +111,7 @@ final class FaceTemplateStore {
     var descriptors: [[Float]] = []
     for item in encoded {
       guard let bytes = Data(base64Encoded: item),
-        bytes.count == FaceFeatureExtractor.descriptorSize * MemoryLayout<Float>.size,
+        bytes.count == format.descriptorSize * MemoryLayout<Float>.size,
         let descriptor = decodeFloats(bytes),
         descriptor.allSatisfy({ $0.isFinite })
       else {

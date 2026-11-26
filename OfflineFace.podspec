@@ -15,8 +15,11 @@ Pod::Spec.new do |s|
 
   s.source_files = "ios/**/*.{h,m,mm,swift}"
   s.private_header_files = "ios/**/*.h"
-  s.resource_bundles = { "OfflineFacePrivacy" => ["ios/PrivacyInfo.xcprivacy"] }
-  s.frameworks = "AVFoundation", "Vision", "Security", "UIKit", "CoreImage", "CoreVideo"
+  s.resource_bundles = {
+    "OfflineFacePrivacy" => ["ios/PrivacyInfo.xcprivacy"],
+    "OfflineFaceModels" => ["ios/Models/FaceApiRecognition.mlmodel"]
+  }
+  s.frameworks = "AVFoundation", "Vision", "Security", "UIKit", "CoreImage", "CoreVideo", "CoreML"
   s.swift_version = "5.9"
 
   install_modules_dependencies(s)
