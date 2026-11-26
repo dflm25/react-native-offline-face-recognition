@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -171,9 +172,13 @@ export default function App() {
             <Text style={styles.logoText}>OF</Text>
           </View>
           <View style={styles.headerText}>
-            <Text style={styles.title}>Offline Face</Text>
+            <Text style={styles.title}>
+              {Platform.OS === 'ios' ? 'OfflineFace ML' : 'Offline Face'}
+            </Text>
             <Text style={styles.subtitle}>
-              Clock-in face verification, fully on-device
+              {Platform.OS === 'ios'
+                ? 'FaceRecognitionNet pilot'
+                : 'Clock-in face verification, fully on-device'}
             </Text>
           </View>
         </View>

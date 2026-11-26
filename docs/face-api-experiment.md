@@ -3,6 +3,8 @@
 The iOS example opts in with `OfflineFaceExperimentFaceApi` in its Info.plist. Register a new
 face in **OfflineFace ML**, then use **Verify face**. The experimental installation uses a separate
 bundle identifier, `com.dlucumi.offlinefaceexperiment`.
+The capture screen shows when Core ML is ready and how many samples FaceRecognitionNet has processed.
+If an earlier template is selected, the verification screen identifies it as texture matching.
 
 Core ML runs the converted FaceRecognitionNet on a color crop of 150 × 150 pixels and produces
 128 floats. The camera, liveness challenge, and public API are the same as in the texture flow.

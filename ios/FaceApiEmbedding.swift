@@ -28,6 +28,10 @@ enum FaceApiEmbedding {
     throw ModelError.resourceMissing
   }
 
+  static func prepare() throws {
+    _ = try model.get()
+  }
+
   /// The incoming color patch is aligned in the same coordinates as the 64 px texture patch.
   static func extract(from patch: CIImage, context: CIContext) throws -> [Float] {
     let inputSize = 150

@@ -5,7 +5,8 @@
 1. The user taps register or verify in the host app.
 2. The native module opens the front camera. Frames exist only in process memory.
 3. Face detection and descriptor extraction run locally (Apple Vision / bundled ML Kit).
-4. On enrollment, only six float histogram descriptors plus a random local template ID are stored:
+4. On enrollment, six feature vectors plus a random local template ID are stored. These are
+   texture histograms by default and embeddings in the iOS FaceRecognitionNet pilot.
    - iOS: a Keychain generic-password item with
      `kSecAttrAccessibleWhenUnlockedThisDeviceOnly` and `kSecAttrSynchronizable = false`.
    - Android: an AES-256-GCM ciphertext in `noBackupFilesDir`; the key never leaves Android

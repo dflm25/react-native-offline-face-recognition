@@ -34,7 +34,7 @@ hardware. Device compromise is out of scope.
 | Template at rest | AES-256-GCM with a non-exportable Android Keystore key; iOS Keychain item with `WhenUnlockedThisDeviceOnly`. |
 | Cloud backup of template | Android `noBackupFilesDir`; iOS Keychain item is not synchronizable. |
 | Data exfiltration via library | No network permission in the library manifest, no HTTP client, no analytics, no image persistence. |
-| Accidental frame persistence | Frames are processed in memory and released; only float histograms are stored. |
+| Accidental frame persistence | Frames are processed in memory and released. Templates contain float histograms or, in the iOS pilot, embeddings. |
 | Optional glasses check | On-device classification is skipped by default; when enabled with `allowGlasses: false`, it may block capture. The check is best-effort and no crop is persisted. |
 | Concurrent captures | Native module rejects a second capture with `already_in_progress`. |
 | Sensitive data in result | Results contain status, an opaque local ID and score. An opt-in registration result can also contain a JPEG face photo; the host app is responsible for protecting it. |
@@ -46,7 +46,7 @@ The active challenge is not ISO/IEC 30107-3 certified. In particular:
 - a 3D mask or high-quality deepfake may pass;
 - an attacker with a prepared, interactive video feed may pass;
 - twins and very close lookalikes may exceed the similarity threshold;
-- the descriptor is a compact LBP/HOG histogram, not a deep embedding, so it is more sensitive to
+- the default LBP/HOG texture descriptor is sensitive to
   extreme pose, lighting, occlusion, and camera differences;
 - rooted/jailbroken devices, hooking frameworks, or camera injection can bypass any check made in
   app code;

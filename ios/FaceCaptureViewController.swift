@@ -27,6 +27,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
   private var bottomPanel: UIView!
   private var glassesWarningLabel: UILabel!
   private var topStack: UIStackView!
+  private var modelStatusLabel: UILabel?
   private var timeoutWorkItem: DispatchWorkItem?
   private var enrolledTemplate: FaceTemplate?
   private var probes: [[Float]] = []
@@ -34,6 +35,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
   private var inferenceInFlight = false
   private var captureGeneration = 0
   private lazy var registrationFormat = FaceDescriptorFormat.registrationFormat
+  private var activeFormat: FaceDescriptorFormat { enrolledTemplate?.format ?? registrationFormat }
   private var registrationPhoto: String?
   private var lastLivenessState: LivenessTracker.State?
   private let approachTracker = FaceApproachTracker()
@@ -99,6 +101,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     }
 
     buildUi()
+    prepareModelStatus()
     configureSession()
 
     NotificationCenter.default.addObserver(
@@ -186,6 +189,18 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     topStack.spacing = 6
     topStack.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(topStack)
+
+    if activeFormat == .faceApi || registrationFormat == .faceApi {
+      let usesModel = activeFormat == .faceApi
+      let status = UILabel()
+      status.text = usesModel ? "FaceRecognitionNet · Loading" : "Previous enrollment · Texture matching"
+      status.font = .systemFont(ofSize: 15, weight: .semibold)
+      status.textColor = usesModel ? .systemGreen : .systemOrange
+      status.textAlignment = .center
+      status.numberOfLines = 0
+      topStack.addArrangedSubview(status)
+      modelStatusLabel = status
+    }
 
     glassesWarningLabel = UILabel()
     glassesWarningLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -290,6 +305,26 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
       cancel.heightAnchor.constraint(equalToConstant: 40),
       cancel.bottomAnchor.constraint(equalTo: bottomPanel.bottomAnchor, constant: -8),
     ])
+  }
+
+  private func prepareModelStatus() {
+    guard activeFormat == .faceApi else { return }
+    inferenceQueue.async { [weak self] in
+      let available: Bool
+      do {
+        try FaceApiEmbedding.prepare()
+        available = true
+      } catch {
+        available = false
+      }
+      DispatchQueue.main.async { [weak self] in
+        guard let self, !self.isFinished() else { return }
+        self.modelStatusLabel?.text = available
+          ? "FaceRecognitionNet · Core ML ready"
+          : "FaceRecognitionNet · Unavailable"
+        self.modelStatusLabel?.textColor = available ? .systemGreen : .systemOrange
+      }
+    }
   }
 
   private func startSessionIfNeeded() {
@@ -621,7 +656,7 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
     guard now - lastProbeAt >= 0.15 else {
       return
     }
-    let format = enrolledTemplate?.format ?? registrationFormat
+    let format = activeFormat
     if format == .faceApi {
       guard !inferenceInFlight else { return }
       inferenceInFlight = true
@@ -668,6 +703,9 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
 
     lastProbeAt = now
     probes.append(descriptor)
+    if format == .faceApi {
+      modelStatusLabel?.text = "FaceRecognitionNet · \(probes.count)/\(Self.probeCount) samples"
+    }
     updateUi(
       "Capturing \(probes.count)/\(FaceCaptureViewController.probeCount)",
       progress: 0.9 + 0.1 * Float(probes.count) / Float(FaceCaptureViewController.probeCount)
@@ -739,6 +777,9 @@ final class FaceCaptureViewController: UIViewController, AVCaptureVideoDataOutpu
 
   private func resetLiveness(now: CFTimeInterval) {
     captureGeneration += 1
+    if activeFormat == .faceApi, !probes.isEmpty {
+      modelStatusLabel?.text = "FaceRecognitionNet · Core ML ready"
+    }
     registrationPhoto = nil
     approachTracker.reset()
     probes.removeAll()

@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Add an opt-in FaceRecognitionNet pilot on iOS using Core ML and a separate template format.
+
 ### Changed
 
 - Normalize illumination locally for new face templates and prompt for more even light if either

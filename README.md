@@ -20,11 +20,9 @@ screens.
 - **No third-party SaaS.** ML Kit face detection is bundled in the Android binary and Apple Vision
   is used on iOS, so detection also works without downloads.
 
-> **Important:** this package is a privacy-preserving attendance aid, not a certified biometric
-> system. It uses a compact geometric/texture template instead of a deep face-recognition model.
-> Accuracy is lower than Face ID or a trained embedding model, and the liveness check is not
-> certified presentation-attack detection (ISO/IEC 30107-3). Read [SECURITY.md](SECURITY.md)
-> before using it for high-value access control.
+> This package is a privacy-preserving attendance aid. The default matcher uses texture histograms.
+> Its liveness check has not been certified for presentation-attack detection (ISO/IEC 30107-3).
+> See [SECURITY.md](SECURITY.md) for the threat model and limitations.
 
 ## Requirements
 
@@ -235,6 +233,10 @@ The host app can store or transmit a requested photo, so its own privacy disclos
 The iOS privacy manifest declares no collected data types and no tracking.
 
 ## Matching and thresholds
+
+The iOS example enables the [FaceRecognitionNet pilot](https://github.com/dflm25/react-native-offline-face-recognition/blob/main/docs/face-api-experiment.md),
+which uses Core ML and its own template format and cutoff. The settings below describe the default
+texture matcher.
 
 Verification uses the alignment and lighting method that produced the stored template. Existing
 enrollments keep their original processing until a successful re-enrollment.
